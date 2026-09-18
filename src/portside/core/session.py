@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from portside.core.breaks import BreakMode, BreakResult, send_break
 from portside.core.errors import (
     DeviceVanishedError,
     PortsideError,
@@ -105,6 +106,7 @@ class Session:
         rx_maxsize: int = 512,
         read_size: int = 4096,
         read_timeout: float = 0.1,
+        break_mode: BreakMode = BreakMode.AUTO,
     ) -> None:
         self._transport = transport
         self._settings = settings or transport.settings
@@ -114,6 +116,7 @@ class Session:
         self.events = bus or EventBus()
         self._read_size = read_size
         self._read_timeout = read_timeout
+        self.break_mode = break_mode
 
         self._state = SessionState.DISCONNECTED
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -260,10 +263,19 @@ class Session:
 
     # -- control lines -----------------------------------------------------
 
-    async def send_break(self, duration: float = DEFAULT_BREAK_DURATION) -> None:
-        """Send a break condition (F12; emulated fallback arrives in M2)."""
+    async def send_break(
+        self, duration: float = DEFAULT_BREAK_DURATION, *, mode: BreakMode | None = None
+    ) -> BreakResult:
+        """Send a break condition, emulating it when the driver cannot (F12).
+
+        Runs on the I/O worker because the emulated form changes the baud rate
+        and sleeps, which must never happen on the event loop.
+        """
         transport = self._require_connected()
-        await self._run_io(transport.send_break, duration)
+        chosen = mode or self.break_mode
+        result = await self._run_io(lambda: send_break(transport, duration, mode=chosen))
+        assert isinstance(result, BreakResult)
+        return result
 
     async def set_dtr(self, value: bool) -> bool:
         """Drive DTR; False means the driver has no such line (F4)."""

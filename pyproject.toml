@@ -36,13 +36,16 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.6"]
-tui = ["textual>=0.80"]
+tui = ["textual>=1.0"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
   "hypothesis>=6.100",
   "ruff>=0.6",
   "mypy>=1.11",
+  # The TUI's headless pilot tests run in CI, so Textual is a test dependency too.
+  "textual>=1.0",
+  "textual-dev>=1.5",
 ]
 
 [project.urls]

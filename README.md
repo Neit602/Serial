@@ -6,21 +6,31 @@ Portside talks to routers, switches, embedded boards and lab gear over USB-seria
 native RS-232 and Bluetooth serial ports — with the same features, the same profile
 files and the same behaviour on all three operating systems.
 
-> **Status: milestone M1 (core).** The transport layer, port discovery, the session
-> core and a raw pass-through CLI are implemented and tested. Terminal emulation, the
-> Textual TUI, logging, break/paced paste, the PySide6 GUI and file transfers land in
-> later milestones — see [docs/PRD.md](docs/PRD.md).
+> **Status: milestone M2 (terminal).** The core, the terminal emulator, the Textual
+> TUI, session logging, break signalling, paced paste and TOML profiles are implemented
+> and tested. The PySide6 GUI (M3) and file transfers (M4) come next — see
+> [docs/PRD.md](docs/PRD.md).
 
 ## What works today
 
 - `portside --list` — every serial port with description, VID:PID, chip family,
   serial number and (on Linux) the bound driver and stable `/dev/serial/by-id` path.
-- `portside connect <port> --baud N` — raw pass-through: bytes in, bytes out, no
-  emulation, no line-ending translation.
+- `portside connect <port> --baud N` — a full terminal: VT100/xterm emulation with
+  colour, the alternate screen and line drawing, 10,000 lines of scrollback, search,
+  and a hex view.
+- **Break**, including an emulated break for adapters whose driver has none — the
+  thing you need to interrupt a boot and get to ROMMON.
+- **Paced paste**: per-character and per-line delays, and an optional wait-for-prompt
+  regex, so a pasted config arrives intact on gear with no usable flow control.
+- **Session logs**: text (decoded, timestamped) or raw (byte-exact), filename
+  templates, size-based rotation, and timestamps that are absolute, elapsed or per-line
+  deltas.
+- **Profiles** in TOML that auto-apply by *device*: the same adapter gets the same
+  settings whether it appears as `/dev/ttyUSB0`, `/dev/cu.usbserial-A50285BI` or `COM9`.
 - Full line settings: baud 50–4,000,000, data bits 5–8, parity N/E/O/M/S,
-  stop bits 1/1.5/2, flow control none/RTS-CTS/DSR-DTR/XON-XOFF.
-- Auto-reconnect that follows the *device*, not the port name: an adapter that comes
-  back as `/dev/ttyUSB1` or `COM9` is still recognised (`--reconnect`).
+  stop bits 1/1.5/2, flow control none/RTS-CTS/DSR-DTR/XON-XOFF; line endings, local
+  echo and backspace are per-profile, never an OS default.
+- Auto-reconnect that follows the *device*, not the port name (`--reconnect`).
 - Actionable errors: permission denied, port busy, port missing and device vanished
   each come with the fix for the platform you are on.
 
@@ -73,7 +83,7 @@ portside --list
 portside --list --verbose          # adds driver and stable path
 portside --list --json             # machine-readable
 
-# Connect (raw pass-through). Ctrl-] quits.
+# Connect. On a terminal this opens the TUI; F1 shows the keys.
 portside connect /dev/ttyUSB0 --baud 115200
 portside connect COM3 --baud 9600 --parity E --data-bits 7 --stop-bits 2
 portside connect /dev/cu.usbserial-A50285BI --baud 115200 --flow rtscts
@@ -81,7 +91,11 @@ portside connect /dev/cu.usbserial-A50285BI --baud 115200 --flow rtscts
 # Survive a replug of the same adapter
 portside connect /dev/ttyUSB0 --baud 115200 --reconnect
 
-# Scriptable: stdin is piped, stdout is the device's output
+# Log the session while you work
+portside connect /dev/ttyUSB0 --baud 9600 --log session.log --timestamps elapsed
+
+# Raw pass-through, exactly as in M1 (and what piping selects automatically)
+portside connect /dev/ttyUSB0 --baud 9600 --raw
 printf 'show version\r' | portside connect /dev/ttyUSB0 --baud 9600 --quiet > out.txt
 ```
 
@@ -92,6 +106,63 @@ Portside also accepts pySerial URLs, which is handy without hardware:
 
 ```bash
 portside connect loop:// --baud 115200      # echoes whatever you type
+```
+
+### In the TUI
+
+| Key | Does |
+| --- | --- |
+| `F1` | Show the key map |
+| `F2` | Send a break (emulated automatically if the driver has none) |
+| `F3` | Find in the screen and scrollback |
+| `F4` | Paste a file, paced; press again to cancel |
+| `F5` | Start or stop logging |
+| `F6` | Toggle the hex view |
+| `F7` | Cycle timestamp modes |
+| `F8` | Cycle dark / light / high-contrast themes |
+| `F9` | Clear the screen and scrollback |
+| `F10` | Quit |
+| `PgUp` / `PgDn` | Move through the scrollback |
+
+Everything else goes to the device — `Ctrl-C`, `Ctrl-Z`, arrows, function-key sequences
+and all. Typing returns the view to the live tail.
+
+### Profiles
+
+A profile stores the port settings, line discipline, break mode, pacing, logging and
+terminal options, and can bind itself to a device so it is applied on sight.
+
+```bash
+portside profiles                          # list
+portside profiles show cisco-lab
+portside profiles export cisco-lab --file cisco-lab.toml
+portside profiles import cisco-lab.toml    # e.g. from a colleague
+portside connect /dev/ttyUSB0 --profile cisco-lab
+portside connect /dev/ttyUSB0 --profile cisco-lab --baud 115200   # flags win
+```
+
+Profiles are plain TOML — meant to be edited by hand and kept in git. They live in
+`~/.config/portside` (Linux), `~/Library/Application Support/Portside` (macOS) or
+`%APPDATA%\Portside` (Windows), and the same file works on all three.
+
+```toml
+name = "cisco-lab"
+device_keys = ["usb_0403_6001_A50285BI"]
+
+[serial]
+baudrate = 9600
+
+[text]
+send_ending = "cr"
+backspace = "del"
+
+[pacing]
+line_delay = 0.05
+wait_for_prompt = "[>#]\\s*$"
+
+[break]
+mode = "auto"
+duration = 0.25
 ```
 
 ## Develop
@@ -107,8 +178,11 @@ uv run pytest
 ```
 
 The integration tests use a [socat](http://www.dest-unreach.org/socat/) virtual serial
-pair. Install it (`apt install socat`, `brew install socat`) to run them; they skip
-cleanly on Windows and wherever socat is missing.
+pair, with a scripted console at the far end that prompts, echoes and notices a break —
+close enough to a switch to exercise pacing, logging and the TUI end to end. Install
+socat (`apt install socat`, `brew install socat`) to run them; they skip cleanly on
+Windows and wherever socat is missing. The parts no CI can cover are listed in
+[docs/HARDWARE-CHECK.md](docs/HARDWARE-CHECK.md).
 
 CI runs ruff, mypy `--strict` and pytest on ubuntu-latest, macos-latest and
 windows-latest against Python 3.11 and 3.13.
@@ -123,8 +197,10 @@ lives in `portside.platform` and `portside.transport` behind typed interfaces, s
 rest of the code never branches on `sys.platform`. Paths come from `platformdirs`.
 
 - [docs/PRD.md](docs/PRD.md) — product requirements
-- [docs/PLAN.md](docs/PLAN.md) — the M1 task breakdown
+- [docs/PLAN.md](docs/PLAN.md) — the M1 task breakdown and outcome
+- [docs/PLAN-M2.md](docs/PLAN-M2.md) — the M2 task breakdown and outcome
 - [docs/DECISIONS.md](docs/DECISIONS.md) — decisions taken where the PRD was ambiguous
+- [docs/HARDWARE-CHECK.md](docs/HARDWARE-CHECK.md) — the per-release checks CI cannot run
 
 ## Licence
 

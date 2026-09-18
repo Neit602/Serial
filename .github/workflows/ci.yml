@@ -79,8 +79,12 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install socat
 
+      # COLUMNS/LINES keep Textual's headless pilot deterministic across runners.
       - name: pytest
         run: uv run pytest -ra --durations=10
+        env:
+          COLUMNS: "120"
+          LINES: "40"
 
       - name: Confirm the integration tier actually ran (POSIX)
         if: runner.os != 'Windows'
@@ -91,3 +95,8 @@ jobs:
           uv run portside --version
           uv run portside --list
           uv run portside --list --json
+          uv run portside profiles list
+
+      # The TUI needs a terminal; piped I/O must still fall back to raw mode.
+      - name: Smoke-test raw pass-through over loop://
+        run: uv run python -c "import subprocess,sys; p=subprocess.run([sys.executable,'-m','portside','connect','loop://','--baud','115200','--quiet','--drain','0.5'],input=b'hello\r',capture_output=True,timeout=60); assert p.returncode==0, p; assert p.stdout==b'hello\r', p.stdout; print('raw pass-through ok')"
