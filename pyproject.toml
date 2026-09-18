@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "portside"
+version = "0.1.0"
+description = "Cross-platform serial terminal for Linux, macOS and Windows"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Portside contributors" }]
+keywords = ["serial", "terminal", "rs232", "uart", "console"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications",
+  "Topic :: Terminals :: Serial",
+]
+dependencies = [
+  "pyserial>=3.5",
+  "platformdirs>=4.0",
+  "tomli-w>=1.0",
+  "pyte>=0.8.1",
+  "xmodem>=0.4.7",
+  "pyudev>=0.24 ; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
+tui = ["textual>=0.80"]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "hypothesis>=6.100",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/portside/portside"
+Issues = "https://github.com/portside/portside/issues"
+
+[project.scripts]
+portside = "portside.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/portside"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "ANN", "PTH"]
+# B027: ABCs here deliberately offer optional no-op hooks (Transport.cancel_read,
+# RawConsole.enter_raw) that most backends do not need to override.
+ignore = ["ANN401", "B027"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "B011"]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-allowed-modules = ["logging", "platform", "types"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+mypy_path = "src"
+warn_unreachable = true
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+
+[[tool.mypy.overrides]]
+module = ["serial.*", "pyte.*", "xmodem.*", "pyudev.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+  "socat: integration tests needing a socat virtual serial pair (POSIX only)",
+  "slow: tests that take more than a second",
+]
+filterwarnings = ["error"]
