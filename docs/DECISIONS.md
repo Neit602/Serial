@@ -160,3 +160,66 @@ opt-in, and a bad pattern is a typed error rather than a traceback.
 a scripted console on a real socat serial pair, driven end to end through the TUI
 (`tests/integration/test_fake_switch.py`). The hardware half is `docs/HARDWARE-CHECK.md`, to be
 run per release on all three OSes. What CI proves and what it cannot is stated there explicitly.
+
+## M3 — GUI
+
+### D29. An asyncio loop on a worker thread, bridged by Qt signals
+Qt will not share its event loop with asyncio. Portside runs the core's loop on a dedicated
+thread (`gui/runtime.py`) and republishes session events as Qt signals, which Qt delivers to the
+GUI thread through queued connections. The alternative — a loop-integration library such as
+`qasync` — would add a dependency the PRD's stack does not list and would hide the thread
+boundary rather than make it explicit. Every controller call returns a future; nothing in the
+GUI ever waits on the port.
+
+### D30. A painted terminal widget, not a text widget
+`QPlainTextEdit` fights per-cell attributes, the block cursor, the alternate screen and
+cell-accurate selection. `TerminalWidget` paints cells with `QPainter`, repainting from a 60 fps
+timer only when the emulator's revision counter moves — the same batching rule the TUI uses, and
+what makes high baud rates survivable.
+
+### D31. Resizing must not lose output — fixed in the emulator
+pyte's `resize` drops the top rows when a screen shrinks and forgets them, and its sparse buffer
+can leave a stale copy of a dropped row behind. Found by a GUI test (opening the find bar resizes
+the terminal). `Terminal.resize` now moves the rows that no longer fit into the scrollback,
+keeping their colours, and rebuilds the screen from the rows that survive. Columns are still not
+reflowed: pyte truncates rather than rewrapping, and reflowing would mean re-running the whole
+scrollback through the emulator. The TUI gets the same fix for free.
+
+### D32. The GUI connects from the `PortInfo` the user clicked
+It does not re-resolve the port through discovery. That would cost a second scan on every
+connect and would lose the device identity for ports enumeration does not list (D5) — which in
+turn would break profile auto-apply and reconnect-by-identity for exactly the devices that need
+them most.
+
+### D33. Three visual states for modem lines, not two
+`ModemLines` reports `None` for a line the driver does not implement (D4). The signals panel
+renders that as "not reported by this driver", never as "low", and the DTR/RTS toggles disable
+themselves with an explanatory tooltip when the driver refuses them. Claiming a line is low when
+it is unknown would be a lie the user debugs for an hour.
+
+### D34. The settings dialog never invents values it has no control for
+Editing a profile in the GUI preserves fields the dialog does not show — the log's own character
+set, for instance. Overwriting them would silently discard whatever a hand-edited profile set.
+
+### D35. Qt is an optional extra, and importing Portside never imports it
+`pip install portside` gives the CLI and the TUI with no Qt anywhere; `pip install portside[gui]`
+adds the desktop app. `portside.gui.__init__` deliberately contains no Qt import, and a test in a
+fresh interpreter asserts that importing Portside leaves `PySide6` out of `sys.modules`. Running
+`portside-gui` without Qt prints how to install it and what still works without it.
+
+### D36. The GUI is a separate entry point
+`portside connect` remains the CLI/TUI; the desktop app is `portside-gui` (or `portside gui`).
+Launching a window from a command that has always been a terminal program would surprise every
+existing script and every ssh session.
+
+### D37. The M3 exit criterion is split, like M2's
+"New user connects in under 30 s" measures a person. The automated half asserts the *shape* of
+the path — a cold app with a device present reaches a connected session in at most three actions,
+no typing, no dialogs — and fails if anyone adds a step. The human half is
+[USABILITY-CHECK.md](USABILITY-CHECK.md), to be run per release on all three OSes.
+
+### D38. Memory is asserted as growth, not peak
+`resource.getrusage` reports a process high-water mark that never falls, so an absolute
+assertion depends on whatever ran earlier in the test session. The memory test measures the
+growth the four sessions cause (from `/proc/self/statm` on Linux, skipped elsewhere), which is
+the part actually attributable to the feature.

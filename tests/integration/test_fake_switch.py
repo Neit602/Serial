@@ -58,12 +58,16 @@ async def test_a_session_talks_to_the_scripted_console(socat_pair: SocatPair) ->
             await session.close()
 
 
-_BUFFERS: dict[int, bytearray] = {}
+#: Received bytes are recorded on the session itself.  Keying a module-level
+#: dict by id() would be wrong: CPython reuses ids, so a later session can
+#: inherit a dead one's buffer and make an assertion pass without ever having
+#: received anything.
+_RX_ATTRIBUTE = "_test_received"
 
 
 def _collected(session: Session) -> bytes:
     """Everything the session has received so far (tests only)."""
-    return bytes(_BUFFERS.setdefault(id(session), bytearray()))
+    return bytes(getattr(session, _RX_ATTRIBUTE, bytearray()))
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +80,8 @@ def _collect_rx(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def patched(self: _Session, *args: object, **kwargs: object) -> None:
         original(self, *args, **kwargs)  # type: ignore[arg-type]
-        buffer = _BUFFERS.setdefault(id(self), bytearray())
+        buffer = bytearray()
+        setattr(self, _RX_ATTRIBUTE, buffer)
         self.events.subscribe(
             lambda event: buffer.extend(event.data) if isinstance(event, BytesReceived) else None
         )

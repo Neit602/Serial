@@ -6,10 +6,10 @@ Portside talks to routers, switches, embedded boards and lab gear over USB-seria
 native RS-232 and Bluetooth serial ports — with the same features, the same profile
 files and the same behaviour on all three operating systems.
 
-> **Status: milestone M2 (terminal).** The core, the terminal emulator, the Textual
-> TUI, session logging, break signalling, paced paste and TOML profiles are implemented
-> and tested. The PySide6 GUI (M3) and file transfers (M4) come next — see
-> [docs/PRD.md](docs/PRD.md).
+> **Status: milestone M3 (GUI).** The core, the terminal emulator, the Textual TUI, the
+> PySide6 desktop app, session logging, break signalling, paced paste and TOML profiles
+> are implemented and tested. File transfers (M4) and signed installers (M5) come next —
+> see [docs/PRD.md](docs/PRD.md).
 
 ## What works today
 
@@ -27,6 +27,9 @@ files and the same behaviour on all three operating systems.
   deltas.
 - **Profiles** in TOML that auto-apply by *device*: the same adapter gets the same
   settings whether it appears as `/dev/ttyUSB0`, `/dev/cu.usbserial-A50285BI` or `COM9`.
+- **A desktop app** (`portside-gui`): device list with hot-plug, sessions as tabs or
+  separate windows, live CTS/DSR/DCD/RI indicators and DTR/RTS toggles, settings and
+  profile dialogs, selection and clipboard, dark/light/high-contrast themes.
 - Full line settings: baud 50–4,000,000, data bits 5–8, parity N/E/O/M/S,
   stop bits 1/1.5/2, flow control none/RTS-CTS/DSR-DTR/XON-XOFF; line endings, local
   echo and backspace are per-profile, never an OS default.
@@ -127,6 +130,34 @@ portside connect loop:// --baud 115200      # echoes whatever you type
 Everything else goes to the device — `Ctrl-C`, `Ctrl-Z`, arrows, function-key sequences
 and all. Typing returns the view to the live tail.
 
+### The desktop app
+
+```bash
+pipx install "portside[gui]"   # Qt is an optional extra
+portside-gui                   # or: portside gui
+```
+
+Pick a device in the list on the left and press Enter (or double-click) — that is the
+whole path to a connected terminal. Sessions open as tabs; `File ▸ Detach tab to window`
+moves one into its own window without dropping the connection.
+
+| Shortcut | Does |
+| --- | --- |
+| `Ctrl+N` / `Ctrl+Shift+N` | Connect / connect with settings first |
+| `Ctrl+W` | Close the session |
+| `Ctrl+B` | Send a break (emulated automatically if the driver has none) |
+| `Ctrl+Shift+V` | Paste a file, paced (or just drop the file on the window) |
+| `Ctrl+L` | Start or stop logging |
+| `Ctrl+H` | Hex view |
+| `Ctrl+F` | Find in the scrollback |
+| `Ctrl+Shift+C` | Copy the selection |
+| `Ctrl+,` / `Ctrl+P` | Session settings / profiles |
+| `Ctrl+K` | Clear |
+
+Everything else goes to the device, including `Ctrl+C` and `Ctrl+Z`.
+
+The GUI needs Qt; the CLI and TUI do not, and importing Portside never pulls Qt in.
+
 ### Profiles
 
 A profile stores the port settings, line discipline, break mode, pacing, logging and
@@ -175,6 +206,7 @@ uv sync --extra dev            # or: python -m venv .venv && .venv/bin/pip insta
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
 uv run pytest
+QT_QPA_PLATFORM=offscreen uv run pytest -m gui   # the Qt tests, headless
 ```
 
 The integration tests use a [socat](http://www.dest-unreach.org/socat/) virtual serial
@@ -192,15 +224,19 @@ windows-latest against Python 3.11 and 3.13.
 The core (`portside.core`, `portside.transport`) is UI-independent and asyncio-based.
 pySerial's blocking reads run on a dedicated thread per session and cross into asyncio
 through `call_soon_threadsafe`; writes are serialised on a single worker thread so they
-can never interleave. A UI thread never touches a port. Everything platform-specific
-lives in `portside.platform` and `portside.transport` behind typed interfaces, so the
-rest of the code never branches on `sys.platform`. Paths come from `platformdirs`.
+can never interleave. A UI thread never touches a port. The Textual TUI attaches to the
+session's event bus directly; the Qt GUI runs the same asyncio loop on a worker thread
+and republishes those events as Qt signals. Everything platform-specific lives in
+`portside.platform` and `portside.transport` behind typed interfaces, so the rest of the
+code never branches on `sys.platform`. Paths come from `platformdirs`.
 
 - [docs/PRD.md](docs/PRD.md) — product requirements
 - [docs/PLAN.md](docs/PLAN.md) — the M1 task breakdown and outcome
 - [docs/PLAN-M2.md](docs/PLAN-M2.md) — the M2 task breakdown and outcome
+- [docs/PLAN-M3.md](docs/PLAN-M3.md) — the M3 task breakdown and outcome
 - [docs/DECISIONS.md](docs/DECISIONS.md) — decisions taken where the PRD was ambiguous
 - [docs/HARDWARE-CHECK.md](docs/HARDWARE-CHECK.md) — the per-release checks CI cannot run
+- [docs/USABILITY-CHECK.md](docs/USABILITY-CHECK.md) — the 30-second first-connect test
 
 ## Licence
 

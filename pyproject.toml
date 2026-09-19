@@ -43,9 +43,12 @@ dev = [
   "hypothesis>=6.100",
   "ruff>=0.6",
   "mypy>=1.11",
-  # The TUI's headless pilot tests run in CI, so Textual is a test dependency too.
+  # The TUI's and GUI's headless tests run in CI, so their toolkits are test
+  # dependencies too.
   "textual>=1.0",
   "textual-dev>=1.5",
+  "PySide6>=6.6",
+  "pytest-qt>=4.4",
 ]
 
 [project.urls]
@@ -54,6 +57,9 @@ Issues = "https://github.com/portside/portside/issues"
 
 [project.scripts]
 portside = "portside.cli.main:main"
+
+[project.gui-scripts]
+portside-gui = "portside.gui.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/portside"]
@@ -71,6 +77,9 @@ ignore = ["ANN401", "B027"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN", "B011"]
+# Qt signals and overridden Qt methods are camelCase by convention; renaming
+# them would break the API Qt itself calls.
+"src/portside/gui/*" = ["N802", "N815"]
 
 [tool.ruff.lint.flake8-builtins]
 builtins-allowed-modules = ["logging", "platform", "types"]
@@ -84,7 +93,7 @@ warn_unreachable = true
 enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 
 [[tool.mypy.overrides]]
-module = ["serial.*", "pyte.*", "xmodem.*", "pyudev.*"]
+module = ["serial.*", "pyte.*", "xmodem.*", "pyudev.*", "pytestqt.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -96,5 +105,6 @@ addopts = "-ra --strict-markers --strict-config"
 markers = [
   "socat: integration tests needing a socat virtual serial pair (POSIX only)",
   "slow: tests that take more than a second",
+  "gui: tests that need Qt (run headless via QT_QPA_PLATFORM=offscreen)",
 ]
 filterwarnings = ["error"]

@@ -217,6 +217,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     profiles.add_argument("name", nargs="?", help="profile name, or path for import")
     profiles.add_argument("--file", metavar="PATH", help="file to export to or import from")
+
+    sub.add_parser("gui", help="open the desktop application (needs the 'gui' extra)")
     return parser
 
 
@@ -595,6 +597,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return asyncio.run(run_connect(args, argv=argv))
         if args.command == "profiles":
             return cmd_profiles(args)
+        if args.command == "gui":
+            from portside.gui import main as gui_main
+
+            return gui_main([])
     except PortsideError as error:
         print(f"portside: {error.display()}", file=sys.stderr)
         return exit_code_for(error)

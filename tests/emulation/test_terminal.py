@@ -245,6 +245,33 @@ def test_scrolling_is_inert_on_the_alternate_screen(term: Terminal) -> None:
 # -- geometry, charsets, lifecycle --------------------------------------
 
 
+def test_shrinking_moves_screen_lines_into_the_scrollback(term: Terminal) -> None:
+    """pyte drops them; a user resizing a window must not lose output."""
+    for n in range(4):
+        term.feed(f"line{n}\r\n".encode())
+    term.resize(20, 2)
+    assert [line for line in term.all_text_lines() if line] == ["line0", "line1", "line2", "line3"]
+
+
+def test_shrinking_keeps_the_attributes_of_moved_lines(term: Terminal) -> None:
+    term.feed(b"\x1b[31mred line\x1b[0m\r\n")
+    for n in range(3):
+        term.feed(f"line{n}\r\n".encode())
+    term.resize(20, 2)
+    history = list(term._primary.history.top)
+    assert history, "nothing was moved into the scrollback"
+    assert history[0][0].fg == "red"
+
+
+def test_shrinking_and_growing_does_not_duplicate_lines(term: Terminal) -> None:
+    for n in range(3):
+        term.feed(f"line{n}\r\n".encode())
+    term.resize(20, 2)
+    term.resize(20, 8)
+    lines = [line for line in term.all_text_lines() if line]
+    assert lines == ["line0", "line1", "line2"]
+
+
 def test_resize_keeps_the_scrollback(term: Terminal) -> None:
     for n in range(10):
         term.feed(f"line{n}\r\n".encode())

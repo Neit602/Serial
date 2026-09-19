@@ -46,13 +46,20 @@ class ProfileError(PortsideError):
 
 @dataclass(frozen=True, slots=True)
 class TerminalOptions:
-    """Terminal-side settings a profile carries (F7, F8, F10, F11)."""
+    """Terminal-side settings a profile carries (F7, F8, F10, F11).
+
+    ``font_family`` empty means "the platform's monospace font", which is the
+    only portable default: no font name exists on all three OSes.
+    """
 
     scrollback: int = DEFAULT_SCROLLBACK
     charset: CharacterSet = CharacterSet.UTF8
     strip_high_bit: bool = False
     columns: int = 80
     rows: int = 24
+    font_family: str = ""
+    font_size: int = 11
+    theme: str = "dark"
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +111,9 @@ class Profile:
                 "strip_high_bit": self.terminal.strip_high_bit,
                 "columns": self.terminal.columns,
                 "rows": self.terminal.rows,
+                "font_family": self.terminal.font_family,
+                "font_size": self.terminal.font_size,
+                "theme": self.terminal.theme,
             },
             "pacing": {
                 "char_delay": self.pacing.char_delay,
@@ -160,6 +170,9 @@ class Profile:
                     strip_high_bit=bool(terminal.get("strip_high_bit", False)),
                     columns=int(terminal.get("columns", 80)),
                     rows=int(terminal.get("rows", 24)),
+                    font_family=str(terminal.get("font_family", "")),
+                    font_size=int(terminal.get("font_size", 11)),
+                    theme=str(terminal.get("theme", "dark")),
                 ),
                 pacing=PacePolicy(
                     char_delay=float(pacing.get("char_delay", 0.0)),

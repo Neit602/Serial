@@ -324,16 +324,66 @@ class Terminal:
         self._revision += 1
 
     def resize(self, columns: int, rows: int) -> None:
-        """Resize the screen, keeping the scrollback."""
+        """Resize the screen, keeping the scrollback **and** what is on screen.
+
+        pyte's own resize drops the top rows when the screen shrinks and simply
+        forgets them, so shrinking a window would lose output the user was
+        reading.  Worse, its sparse buffer can leave a stale copy of a dropped
+        row behind.  Both are handled here: the rows that no longer fit are
+        moved into the scrollback (with their colours, because the rows
+        themselves are copied), and the new screen is rebuilt from the rows
+        that survive.
+
+        Columns are not reflowed: pyte truncates long lines rather than
+        rewrapping them, and reflowing would mean re-running the whole
+        scrollback through the emulator.
+        """
         columns = max(1, columns)
         rows = max(1, rows)
         if (columns, rows) == (self._columns, self._rows):
             return
+
+        kept = self._reflow_primary(rows)
         self._columns, self._rows = columns, rows
         self._primary.resize(rows, columns)
         self._alternate.resize(rows, columns)
+        self._restore_rows(kept)
         self._scroll_offset = min(self._scroll_offset, self._max_scroll_offset())
         self._revision += 1
+
+    def _reflow_primary(self, rows: int) -> list[Any]:
+        """Move rows that will not fit into the scrollback; return the rest."""
+        captured = [self._copy_row(self._primary.buffer.get(y)) for y in range(self._rows)]
+        overflow = max(0, len(captured) - rows)
+        if overflow and self._scrollback > 0:
+            history = self._primary.history.top
+            for row in captured[:overflow]:
+                # The same move pyte makes when a line scrolls off the top.
+                history.append(row)
+        return captured[overflow:][:rows]
+
+    def _restore_rows(self, rows: Sequence[Any]) -> None:
+        """Rebuild the screen from ``rows`` after a resize."""
+        buffer = self._primary.buffer
+        buffer.clear()
+        for index, row in enumerate(rows):
+            if row:
+                buffer[index] = row
+        cursor = self._primary.cursor
+        cursor.y = min(cursor.y, self._rows - 1)
+        cursor.x = min(cursor.x, self._columns - 1)
+
+    def _copy_row(self, row: Any) -> Any:
+        """A detached copy of one buffer row.
+
+        pyte shifts the *same* row objects around during a resize, so a row
+        handed to the scrollback must not still be referenced by the screen.
+        """
+        if row is None:
+            return {}
+        copied = type(row)(row.default) if hasattr(row, "default") else {}
+        copied.update(row)
+        return copied
 
     # -- scrollback (F8) ---------------------------------------------------
 
