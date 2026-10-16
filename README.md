@@ -253,6 +253,7 @@ logger are self-contained. Everything platform-specific lives behind the `Platfo
 interface and the transports, so the rest of the code never branches on the OS. The CLI
 (`src/cli`) and the desktop app (`src/gui`) are thin layers over the core.
 
+- [docs/instruction.html](docs/instruction.html) — the user guide: what Portside does and how to use it
 - [docs/PRD.md](docs/PRD.md) — product requirements
 - [docs/DECISIONS.md](docs/DECISIONS.md) — decisions taken where the PRD was ambiguous,
   and what changed in the C++ port
