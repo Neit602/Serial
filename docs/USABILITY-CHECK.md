@@ -5,9 +5,10 @@ The PRD's exit criterion for M3 is:
 > Usability pass: new user connects in under 30 s.
 
 That is a measurement of a *person*, not of code, so CI cannot assert it. What CI does assert
-is the shape of the path (`tests/gui/test_main_window.py::test_a_new_user_reaches_a_connected_session_in_three_actions`):
-the device is already listed when the window opens, and reaching a connected terminal takes at
-most three actions with no typing and no dialogs. If anyone adds a step, that test fails.
+is the shape of the path (`tests/gui/tst_main_window.cpp`,
+`aNewUserReachesAConnectedSessionInTwoActions`): the device is already listed when the window
+opens, and reaching a connected terminal takes selecting it and activating it — no typing and
+no dialogs. If anyone adds a step, that test fails.
 
 This document is the other half: run it once per release, on **Linux, macOS and Windows**,
 with a person who has not used Portside before.
@@ -16,10 +17,10 @@ with a person who has not used Portside before.
 
 - A USB-serial adapter and a device that prints something when you press Enter (a switch, a
   dev board, or a second machine).
-- Portside installed as a user would install it: `pipx install "portside[gui]"` (or the
-  packaged app once M5 exists). **Not** a development checkout.
+- Portside installed as a user would install it (`cmake --install`, or the packaged app once
+  M5 exists). **Not** run from a build directory.
 - A stopwatch.
-- No profile files: delete or move `~/.config/portside`, `~/Library/Application Support/Portside`
+- No profile files: delete or move `~/.config/Portside`, `~/Library/Application Support/Portside`
   or `%APPDATA%\Portside` first. The criterion is about a *new* user.
 
 ## The test
@@ -59,7 +60,7 @@ milestone; a fail on any other row is a bug worth filing.
 
 ## Known limits of the automated half
 
-- It counts *actions*, not seconds of human thought: a three-click path can still be confusing.
+- It counts *actions*, not seconds of human thought: a two-click path can still be confusing.
 - It runs headless (`QT_QPA_PLATFORM=offscreen`), so it says nothing about fonts, DPI scaling,
   window decorations or how the app looks on a Retina display or a 4K Windows laptop.
 - It uses a loopback transport, so no driver, no latency and no adapter quirks are involved.

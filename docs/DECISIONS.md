@@ -2,7 +2,8 @@
 
 Where the PRD left room for interpretation, Portside takes the simplest option that keeps
 behaviour identical on Linux, macOS and Windows. Each decision below says what was ambiguous,
-what was chosen, and why.
+what was chosen, and why. D1–D38 were taken for the Python implementation; D39 onwards
+record what the C++ / Qt 6 port kept, changed and fixed.
 
 ## M1 — Core
 
@@ -223,3 +224,104 @@ no typing, no dialogs — and fails if anyone adds a step. The human half is
 assertion depends on whatever ran earlier in the test session. The memory test measures the
 growth the four sessions cause (from `/proc/self/statm` on Linux, skipped elsewhere), which is
 the part actually attributable to the feature.
+
+## The C++ / Qt 6 port
+
+Portside was rewritten from Python (PySide6, pyte, Textual) in C++20 with Qt 6. The port
+keeps the *behaviour* M1–M3 specified, not the code structure: decisions D1–D38 still hold
+except where an entry below amends one. The PRD's stack table (Python, pySerial, pyte,
+Textual, platformdirs, tomllib) is superseded by these entries.
+
+### D39. Qt 6.6+ is the whole stack
+QtSerialPort replaces pySerial and QSerialPortInfo replaces `serial.tools.list_ports`;
+QStandardPaths replaces platformdirs, keeping the same directories on every OS
+(`~/.config/Portside`, `~/Library/Application Support/Portside`, `%APPDATA%\Portside`, and
+the platformdirs log directories). `PORTSIDE_CONFIG_DIR` and `PORTSIDE_LOG_DIR` override
+them. 6.6 is the floor because the session's futures use `QtFuture::makeReadyValueFuture`.
+Tests use Qt Test and CTest; there are no other dependencies.
+
+### D40. One I/O thread per session replaces asyncio (amends D2, D29)
+A `Session` lives on its owner's thread; its transport lives on a `QThread` of its own and
+is called only there. Every write and control call is queued to that thread, which is what
+now guarantees that two `send()`s cannot interleave (D2's single-worker executor, by other
+means). Results come back as `QFuture`s and events as Qt signals; the GUI no longer needs
+the asyncio-on-a-worker-thread bridge of D29. Because QSerialPort is event driven, the
+transport interface is too (`readyRead`, `failed`) rather than a blocking `read()`.
+`Session::open()` blocks for the driver's answer (milliseconds), exactly as the Python GUI
+already did with `runtime.run(session.open())`.
+
+### D41. Receive backpressure is bounded by bytes (amends D3, D22)
+The I/O thread appends to a 4 MiB buffer and the owner drains it on a queued signal; when a
+stalled owner lets it fill, the *oldest* bytes are dropped and counted in
+`Session::rxDropped()`. The logger now listens on the owner's thread alongside the UI, so it
+would only miss data after the owner had been frozen for tens of seconds at 921,600 baud —
+a stall that would already be the bigger problem. Coalescing reads this way also means one
+signal per burst rather than one per read.
+
+### D42. A self-contained VT100/xterm emulator replaces pyte (amends D17, D31)
+A VT500-style parser drives two screens. Because one parser feeds whichever screen is
+active, output after `ESC [?1049h` in the *same* read now lands on the alternate screen (the
+pyte-based version drew it on the primary until the next read). Beyond pyte's coverage it
+answers cursor-position and device-attribute queries (the GUI sends the answers back down
+the wire), honours DECCKM so full-screen programs get the cursor keys they ask for, and
+handles scroll regions, insert/delete, 256-colour and truecolour, and double-width
+characters. Combining marks are dropped rather than composed — rare on a serial console,
+and it keeps a cell to one code point. Scrollback lines are stored trimmed, which is what
+keeps four 10,000-line sessions at ~66 MB. Resizing smaller first discards blank rows
+*below* the cursor and only then moves rows from the top into the scrollback (D31), so a
+prompt at the top of a cleared screen stays put.
+
+### D43. TOML is read and written in-house
+A small TOML 1.0 reader (comments, all string forms, integers in any base, floats, arrays,
+inline tables, dotted keys, `[tables]`, `[[arrays of tables]]`) and writer, rather than a
+new dependency. Errors name the line. Dates and times are rejected with a clear message:
+nothing in a profile is a date. Profiles written by the Python Portside load unchanged.
+
+### D44. The Textual TUI is gone; `portside connect` is pass-through (amends D7, D16, D23)
+The C++ port ships the desktop app and the command line only. `portside connect` always
+connects the user's own terminal to the device, which does the VT100 work. On an
+interactive terminal it applies the profile's line discipline (what Enter and Backspace
+send, local echo) unless `--raw` is given; piped input stays byte-exact. `Ctrl-]` no longer
+quits outright: it opens a one-key menu — `q` (or `Ctrl-]` again) quits, `b` sends a break,
+`d`/`r` toggle DTR/RTS, `]` sends a literal `Ctrl-]` — because without the TUI's F-keys
+this is the only way to send a break from a headless box. When the device is lost and no
+reconnect follows, `connect` exits with code 5, as D8's table says.
+
+### D45. Linux discovery hides phantom UARTs and reports the real driver
+QSerialPortInfo lists every `ttyS*` node the 8250 driver registered, including the dozens
+with no UART behind them. Ports whose sysfs `type` is 0 ("unknown") are hidden, which is
+more reliable than pySerial's subsystem check on recent kernels. Since Linux 6.5 an on-board
+UART's tty hangs off the serial core's `port`/`ctrl` shims, so the driver reported is the
+first real one above them. There is no udev watcher: the device list polls once a second,
+which meets F1's two seconds on every OS (the Python GUI polled too).
+
+### D46. Exceptions inside the core, signals at its edge
+The core throws a typed `PortsideError` (kind, message, port, remedy) wherever Python raised;
+nothing throws through a Qt event handler — the session catches on the I/O thread and
+re-delivers as a failed future or an `errorRaised` signal.
+
+### D47. `loop://` is the only URL
+pySerial's URL handlers are gone. `loop://` (an echoing in-memory port, as before) is built
+in; any other `scheme://` is refused with an explanation.
+
+### D48. Line-setting gaps behave as pySerial did
+termios has no 1.5 stop bits and no DSR/DTR handshaking. 1.5 falls back to 2 where the
+driver refuses it, and DSR/DTR flow control is applied through the DCB on Windows and is a
+no-op elsewhere — what pySerial did on each OS. DTR and RTS are asserted on open, as
+pySerial's defaults were.
+
+### D49. Log details (amends D21)
+A CRLF split across two reads is one line break in a text log, not two. Rotation numbers
+past any rotated file already present (`name.N.log`) instead of restarting at 1, so a new
+session never overwrites an earlier session's rotations; pruning removes the lowest numbers.
+
+### D50. GUI behaviour fixed in the port
+While auto-reconnect waits for a device, each failed attempt updates the status line instead
+of opening an error dialog. PgUp/PgDn scroll the scrollback (the Python GUI swallowed them),
+Tab reaches the device instead of moving focus, modem lines are read as soon as a session
+opens, a cancelled paste is reported in the status line rather than as an error, and an
+unknown font family falls back to the system monospace font.
+
+### D51. Version 0.2.0 marks the rewrite
+The CLI, the profile format and the exit codes are unchanged; the minor version bump says
+the implementation underneath is new.

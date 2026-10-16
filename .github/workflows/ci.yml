@@ -11,105 +11,107 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FORCE_COLOR: "1"
+  QT_VERSION: "6.8.3"
 
 jobs:
-  lint:
-    name: ruff + mypy (${{ matrix.os }}, py${{ matrix.python-version }})
+  build-and-test:
+    name: build + test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
         with:
-          enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          version: ${{ env.QT_VERSION }}
+          modules: qtserialport
+          cache: true
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Install project
-        run: uv sync --extra dev --python ${{ matrix.python-version }}
-
-      - name: ruff (lint)
-        run: uv run ruff check .
-
-      - name: ruff (format)
-        run: uv run ruff format --check .
-
-      - name: mypy --strict
-        run: uv run mypy
-
-  test:
-    name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11", "3.13"]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install project
-        run: uv sync --extra dev --python ${{ matrix.python-version }}
-
-      # socat gives the integration tests a real pair of virtual serial ports.
-      # It is unavailable on Windows, where those tests skip themselves.
-      # The Qt runtime libraries are what PySide6 needs to start even headless.
-      - name: Install socat and the Qt runtime (Linux)
+      # socat gives the integration tests a real pair of virtual serial ports;
+      # it is unavailable on Windows, where those tests skip themselves.  The
+      # font and GL libraries are what Qt needs to render even headless.
+      - name: Install socat and runtime libraries (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y socat \
-            libegl1 libgl1 libxkbcommon-x11-0 libdbus-1-3 \
-            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
-            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xfixes0
+          sudo apt-get install -y socat libgl1 libegl1 libxkbcommon0 libfontconfig1 fonts-dejavu-core
 
       - name: Install socat (macOS)
         if: runner.os == 'macOS'
         run: brew install socat
 
-      # COLUMNS/LINES keep Textual's headless pilot deterministic across runners;
-      # QT_QPA_PLATFORM runs the Qt GUI tests without a display.
-      - name: pytest
-        run: uv run pytest -ra --durations=10
-        env:
-          COLUMNS: "120"
-          LINES: "40"
-          QT_QPA_PLATFORM: offscreen
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Confirm the GUI tier actually ran
-        run: uv run pytest -m gui --collect-only -q
-        env:
-          QT_QPA_PLATFORM: offscreen
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DPORTSIDE_WARNINGS_AS_ERRORS=${{ runner.os == 'Linux' && 'ON' || 'OFF' }}
 
-      - name: Confirm the integration tier actually ran (POSIX)
-        if: runner.os != 'Windows'
-        run: uv run pytest -m socat --collect-only -q
+      - name: Build
+        run: cmake --build build --parallel
 
-      - name: Smoke-test the console script
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 300
+
+      - name: Confirm the GUI and integration tiers ran
+        shell: bash
         run: |
-          uv run portside --version
-          uv run portside --list
-          uv run portside --list --json
-          uv run portside profiles list
+          ctest --test-dir build -L gui -N | grep -q "Total Tests: 5"
+          ctest --test-dir build -L socat -N | grep -q "Total Tests: 1"
 
-      # The TUI needs a terminal; piped I/O must still fall back to raw mode.
-      - name: Smoke-test raw pass-through over loop://
-        run: uv run python -c "import subprocess,sys; p=subprocess.run([sys.executable,'-m','portside','connect','loop://','--baud','115200','--quiet','--drain','0.5'],input=b'hello\r',capture_output=True,timeout=60); assert p.returncode==0, p; assert p.stdout==b'hello\r', p.stdout; print('raw pass-through ok')"
+      - name: Smoke-test the command line
+        shell: bash
+        run: |
+          build/src/cli/portside --version
+          build/src/cli/portside --list
+          build/src/cli/portside --list --json
+          build/src/cli/portside profiles list
+          # Piped input selects byte-exact pass-through; loop:// echoes it.
+          out=$(printf 'hello\r' | build/src/cli/portside connect loop:// --baud 115200 --quiet --drain 0.5 | od -An -c | tr -s ' ')
+          echo "got: $out"
+          test "$out" = " h e l l o \r"
+
+  sanitizers:
+    name: AddressSanitizer + UBSan (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: qtserialport
+          cache: true
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install socat and runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y socat libgl1 libegl1 libxkbcommon0 libfontconfig1 fonts-dejavu-core
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure --timeout 600
