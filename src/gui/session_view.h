@@ -9,6 +9,7 @@
 #include "core/errors.h"
 #include "core/find.h"
 #include "core/terminal.h"
+#include "core/transfer/transfer.h"
 #include "gui/palette.h"
 
 #include <QList>
@@ -20,6 +21,7 @@
 class QLabel;
 class QLineEdit;
 class QProgressBar;
+class QPushButton;
 class QTimer;
 
 namespace portside::gui {
@@ -47,6 +49,13 @@ public:
     QLabel *findStatus() const { return m_findStatus; }
     QProgressBar *pasteProgress() const { return m_pasteProgress; }
     QLabel *statusLabel() const { return m_statusLabel; }
+    // The file transfer panel: title, per-file and overall progress, cancel.
+    QWidget *transferPanel() const { return m_transferPanel; }
+    QLabel *transferTitle() const { return m_transferTitle; }
+    QProgressBar *transferFileBar() const { return m_transferFileBar; }
+    QProgressBar *transferTotalBar() const { return m_transferTotalBar; }
+    QLabel *transferStats() const { return m_transferStats; }
+    QPushButton *transferCancel() const { return m_transferCancel; }
 
     // -- find (F8) ---------------------------------------------------------
 
@@ -77,9 +86,15 @@ public:
 Q_SIGNALS:
     void statusChanged(const QString &text);
     void errorRaised(const portside::PortsideError &error);
+    // A transfer started or ended: actions should be re-enabled or not.
+    void transferStateChanged();
+    // Forwarded from the controller (F18).
+    void zmodemRequested(bool deviceSends);
 
 private:
     QWidget *buildFindBar();
+    QWidget *buildTransferPanel();
+    void showTransferProgress(const TransferProgress &progress);
     void runFind(const QString &query);
     void scrollToMatch();
     void onData(const QByteArray &bytes);
@@ -97,6 +112,13 @@ private:
     QProgressBar *m_pasteProgress = nullptr;
     QLabel *m_statusLabel = nullptr;
     QTimer *m_statusTimer = nullptr;
+    QWidget *m_transferPanel = nullptr;
+    QLabel *m_transferTitle = nullptr;
+    QProgressBar *m_transferFileBar = nullptr;
+    QProgressBar *m_transferTotalBar = nullptr;
+    QLabel *m_transferStats = nullptr;
+    QPushButton *m_transferCancel = nullptr;
+    QString m_transferNote;
 
     QString m_notice;
     QString m_pasteNote;

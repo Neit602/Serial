@@ -6,12 +6,13 @@ Portside talks to routers, switches, embedded boards and lab gear over USB-seria
 native RS-232 and Bluetooth serial ports — with the same features, the same profile
 files and the same behaviour on all three operating systems.
 
-> **Status: C++ rewrite of milestone M3.** The core, the terminal emulator, the
-> command line, the Qt desktop app, session logging, break signalling, paced paste and
-> TOML profiles are implemented and tested. The original Python implementation (M1–M3)
-> is in git history on the `m3-gui` branch; what changed in the port is in
-> [docs/DECISIONS.md](docs/DECISIONS.md) (D39 onwards). File transfers (M4) and signed
-> installers (M5) come next — see [docs/PRD.md](docs/PRD.md).
+> **Status: milestone M4 (file transfers).** The core, the terminal emulator, the
+> command line, the Qt desktop app, session logging, break signalling, paced paste, TOML
+> profiles and XMODEM/YMODEM/ZMODEM/Kermit transfers are implemented and tested. The
+> original Python implementation (M1–M3) is in git history on the `m3-gui` branch; what
+> changed in the C++ port is in [docs/DECISIONS.md](docs/DECISIONS.md) (D39 onwards), and
+> the transfer decisions are D52–D60. Signed installers (M5) come next — see
+> [docs/PRD.md](docs/PRD.md).
 
 ## What works today
 
@@ -28,6 +29,12 @@ files and the same behaviour on all three operating systems.
   thing you need to interrupt a boot and get to ROMMON.
 - **Paced paste**: per-character and per-line delays, and an optional wait-for-prompt
   regex, so a pasted config arrives intact on gear with no usable flow control.
+- **File transfers**: XMODEM (checksum, CRC-16, 1K), YMODEM (batch, -G), ZMODEM (with
+  auto-start when the device runs `sz` or `rz`, and resume) and Kermit (long packets),
+  in both directions, plus raw binary send — from the desktop app, by dropping a file on
+  the window, or with `portside send` / `portside receive` in scripts. Downloads land as
+  `NAME.part` and are renamed when complete; existing files are never overwritten unless
+  you say so.
 - **Session logs**: text (decoded, timestamped) or raw (byte-exact), filename
   templates, size-based rotation, and timestamps that are absolute, elapsed or per-line
   deltas.
@@ -113,7 +120,8 @@ moves one into its own window without dropping the connection.
 | `Ctrl+N` / `Ctrl+Shift+N` | Connect / connect with settings first |
 | `Ctrl+W` | Close the session |
 | `Ctrl+B` | Send a break (emulated automatically if the driver has none) |
-| `Ctrl+Shift+V` | Paste a file, paced (or just drop the file on the window) |
+| `Ctrl+Shift+V` | Paste a file, paced (or drop the file on the window and choose Paste) |
+| `Ctrl+Shift+S` / `Ctrl+Shift+R` | Send / receive files (XMODEM, YMODEM, ZMODEM, Kermit, raw) |
 | `Ctrl+L` | Start or stop logging |
 | `Ctrl+H` | Hex view |
 | `Ctrl+F` | Find in the scrollback |
@@ -157,6 +165,7 @@ On a terminal, **`Ctrl-]`** opens a one-key menu:
 | `q` (or `Ctrl-]` again) | Quit |
 | `b` | Send a break (emulated automatically if the driver has none) |
 | `d` / `r` | Toggle DTR / RTS |
+| `z` | Receive the file the device is sending with `sz` (Portside says when it sees one) |
 | `]` | Send a literal `Ctrl-]` to the device |
 
 Enter and Backspace send what the profile says (`--send-ending`, `--backspace`), and
@@ -167,6 +176,26 @@ Device output goes to stdout and Portside's own messages to stderr, so
 Exit codes: `0` success, `2` bad usage, `3` permission denied, `4` port busy,
 `5` port not found or device gone, `1` anything else.
 
+### File transfers
+
+```bash
+# Send: start the receiver on the device first (rx, rb, loadx, loady, kermit -r...).
+portside send /dev/ttyUSB0 image.bin -P xmodem-1k --baud 115200
+portside send /dev/ttyUSB0 a.cfg b.cfg -P zmodem          # ZMODEM types "rz" for you
+
+# Receive: start this first, then the sender on the device (sx, sb, sz, kermit -s...).
+portside receive /dev/ttyUSB0 -P zmodem --into ~/captures
+portside receive COM3 -P xmodem -o flash.bin             # XMODEM carries no file name
+portside receive COM3 -P ymodem --overwrite rename       # keep both: name.1.ext
+```
+
+Protocols: `xmodem`, `xmodem-1k`, `ymodem`, `ymodem-g`, `zmodem` (default), `kermit`, and
+`raw` (send only, with `--chunk-size` and `--chunk-delay` for receivers without flow
+control). Progress goes to stderr; `Ctrl-C` cancels with the protocol's own cancel so the
+device stops waiting; the exit code is 0 only when every file arrived. In the desktop app
+the same lives under **Transfer**, with a progress panel in the session's tab, and Portside
+offers to receive when the device runs `sz`.
+
 `loop://` is a built-in test port that echoes whatever you type:
 
 ```bash
@@ -175,8 +204,9 @@ portside connect loop://
 
 ### Profiles
 
-A profile stores the port settings, line discipline, break mode, pacing, logging and
-terminal options, and can bind itself to a device so it is applied on sight.
+A profile stores the port settings, line discipline, break mode, pacing, logging,
+terminal options and transfer defaults, and can bind itself to a device so it is applied
+on sight.
 
 ```bash
 portside profiles                          # list
@@ -210,6 +240,12 @@ wait_for_prompt = "[>#]\\s*$"
 [break]
 mode = "auto"
 duration = 0.25
+
+[transfer]
+protocol = "ymodem"
+directory = "/srv/tftp"
+overwrite = "rename"
+zmodem_auto_start = true
 ```
 
 `PORTSIDE_CONFIG_DIR` and `PORTSIDE_LOG_DIR` override the configuration and log
@@ -223,6 +259,8 @@ cmake --build build
 ctest --test-dir build --output-on-failure        # everything; GUI tests run headless
 ctest --test-dir build -L gui                     # just the Qt widget tests
 ctest --test-dir build -L socat                   # just the virtual-serial-pair tests
+ctest --test-dir build -L transfer                # the file transfer suites
+ctest --test-dir build -L interop                 # against lrzsz and Kermit, if installed
 
 # The same suite under AddressSanitizer and UBSan, as CI runs it
 cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
@@ -235,7 +273,12 @@ a [socat](http://www.dest-unreach.org/socat/) virtual serial pair, with a script
 console at the far end that prompts, echoes and notices a break — close enough to a
 switch to exercise pacing, logging and the CLI end to end. Install socat
 (`apt install socat`, `brew install socat`) to run them; they skip cleanly on Windows and
-wherever socat is missing. The parts no CI can cover are listed in
+wherever socat is missing. The transfer engines are tested against each other over an
+in-memory pipe (with corrupted and dropped bytes, cancels from either end and silent
+peers), over two real sessions on a socat pair (including the cable pulled mid-file), and
+against lrzsz (`sx`/`rx`, `sb`/`rb`, `sz`/`rz`) and G-Kermit or C-Kermit in both directions
+when those are installed (`apt install lrzsz gkermit ckermit`, `brew install lrzsz`). The
+parts no CI can cover are listed in
 [docs/HARDWARE-CHECK.md](docs/HARDWARE-CHECK.md).
 
 CI builds and tests on ubuntu-latest, macos-latest and windows-latest against Qt 6.8,
@@ -248,10 +291,12 @@ Each `Session` lives on its owner's thread and drives a transport that lives on 
 `QThread` of its own: every write and control call is queued to that thread, so bytes can
 never interleave and nothing ever blocks the GUI, and received data comes back through a
 bounded, drop-oldest buffer and a queued signal. Results of actions arrive as `QFuture`s,
-events as Qt signals. The VT100/xterm emulator, the TOML reader and the
-logger are self-contained. Everything platform-specific lives behind the `Platform`
-interface and the transports, so the rest of the code never branches on the OS. The CLI
-(`src/cli`) and the desktop app (`src/gui`) are thin layers over the core.
+events as Qt signals. A file transfer *claims* the session's byte stream and runs its
+protocol engine — plain blocking code — on a thread of its own. The VT100/xterm emulator,
+the transfer protocols, the TOML reader and the logger are self-contained. Everything
+platform-specific lives behind the `Platform` interface and the transports, so the rest of
+the code never branches on the OS. The CLI (`src/cli`) and the desktop app (`src/gui`) are
+thin layers over the core.
 
 - [docs/instruction.html](docs/instruction.html) — the user guide: what Portside does and how to use it
 - [docs/PRD.md](docs/PRD.md) — product requirements

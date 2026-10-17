@@ -37,6 +37,10 @@ Profile sample()
     profile.logging.timestamps = TimestampMode::Delta;
     profile.logging.autoStart = true;
     profile.logging.maxBytes = 1'048'576;
+    profile.transfer.protocol = Protocol::Ymodem;
+    profile.transfer.directory = QStringLiteral("/srv/tftp");
+    profile.transfer.overwrite = OverwritePolicy::Rename;
+    profile.transfer.zmodemAutoStart = false;
     profile.breakMode = BreakMode::Emulated;
     profile.breakDuration = 0.5;
     profile.deviceKeys = {QStringLiteral("usb_0403_6001_A50285BI")};
@@ -64,6 +68,17 @@ private Q_SLOTS:
     {
         const Profile profile = sample();
         QCOMPARE(Profile::fromMap(parseToml(profile.toToml())), profile);
+    }
+
+    void profilesFromBeforeTransfersGetTheDefaults()
+    {
+        const Profile profile = Profile::fromMap(parseToml(QStringLiteral("name = \"old\"\n")));
+        QCOMPARE(profile.transfer, TransferDefaults{});
+        QCOMPARE(profile.transfer.protocol, Protocol::Zmodem);
+        QCOMPARE(profile.transfer.overwrite, OverwritePolicy::Refuse);
+        QVERIFY(profile.transfer.zmodemAutoStart);
+        QVERIFY(messageFor(QStringLiteral("name = \"x\"\n[transfer]\nprotocol = \"uucp\"\n"))
+                    .contains(QStringLiteral("transfer.protocol")));
     }
 
     void theFileStartsWithItsSchemaAndName()

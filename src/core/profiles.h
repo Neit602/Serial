@@ -21,6 +21,7 @@
 #include "core/settings.h"
 #include "core/terminal.h"
 #include "core/textio.h"
+#include "core/transfer/transfer.h"
 
 #include <QList>
 #include <QMetaType>
@@ -53,6 +54,19 @@ struct TerminalOptions
     bool operator==(const TerminalOptions &) const = default;
 };
 
+// File transfer defaults (F17–F20).  An empty directory means the user's
+// Downloads folder.
+struct TransferDefaults
+{
+    Protocol protocol = Protocol::Zmodem;
+    QString directory;
+    OverwritePolicy overwrite = OverwritePolicy::Refuse;
+    // Offer to receive when the device starts a ZMODEM send (F18).
+    bool zmodemAutoStart = true;
+
+    bool operator==(const TransferDefaults &) const = default;
+};
+
 // A named bundle of settings, optionally bound to devices (F20).
 struct Profile
 {
@@ -62,6 +76,7 @@ struct Profile
     TerminalOptions terminal;
     PacePolicy pacing;
     LogSettings logging;
+    TransferDefaults transfer;
     BreakMode breakMode = BreakMode::Auto;
     double breakDuration = 0.25;
     // Device identity keys this profile auto-applies to (F2 + F20).

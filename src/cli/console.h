@@ -26,6 +26,7 @@ public:
     // True if stdin / stdout are interactive terminals.
     static bool stdinIsTty();
     static bool stdoutIsTty();
+    static bool stderrIsTty();
 
     // Switch stdin to raw mode (no-op when it is not a terminal).
     void enterRaw();

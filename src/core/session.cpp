@@ -1,6 +1,7 @@
 #include "core/session.h"
 
 #include "core/session_worker.h"
+#include "core/stream_claim.h"
 
 #include <QPromise>
 #include <QThread>
@@ -43,6 +44,20 @@ Session::Session(std::unique_ptr<Transport> transport, SessionOptions options, Q
             Qt::QueuedConnection);
     connect(m_worker, &SessionWorker::transportFailed, this, &Session::handleFailure,
             Qt::QueuedConnection);
+    connect(
+        m_worker, &SessionWorker::claimedReceived, this,
+        [this](const QByteArray &data) {
+            m_bytesIn += data.size();
+            Q_EMIT claimedDataReceived(data);
+        },
+        Qt::QueuedConnection);
+    connect(
+        m_worker, &SessionWorker::claimedWritten, this,
+        [this](qint64 count) {
+            m_bytesOut += count;
+            Q_EMIT bytesSent(count);
+        },
+        Qt::QueuedConnection);
 
     m_reconnectTimer = new QTimer(this);
     m_reconnectTimer->setSingleShot(true);
@@ -115,6 +130,8 @@ void Session::close() noexcept
         return;
     m_closing = true;
     m_reconnectTimer->stop();
+    if (m_claim)
+        m_claim->fail(sessionError(QStringLiteral("the session closed"), m_portName));
     if (m_thread->isRunning()) {
         // Queued behind every write already submitted, so they all complete.
         QMetaObject::invokeMethod(
@@ -124,7 +141,41 @@ void Session::close() noexcept
     }
     // Whatever arrived before the port closed still reaches the subscribers.
     drainReceived();
+    if (m_claim) {
+        m_claim.reset();
+        Q_EMIT streamClaimChanged(false);
+    }
     setState(SessionState::Closed);
+}
+
+std::shared_ptr<StreamClaim> Session::claimStream()
+{
+    if (!isConnected())
+        throw sessionError(
+            QStringLiteral("session for %1 is %2, not connected").arg(m_portName, enumName(m_state)),
+            m_portName);
+    if (m_claim)
+        throw sessionError(QStringLiteral("a file transfer is already using %1").arg(m_portName),
+                           m_portName);
+    auto claim = std::make_shared<StreamClaim>(m_worker);
+    QMetaObject::invokeMethod(
+        m_worker, [this, claim] { m_worker->setClaim(claim); }, Qt::BlockingQueuedConnection);
+    m_claim = claim;
+    Q_EMIT streamClaimChanged(true);
+    return claim;
+}
+
+void Session::releaseStream()
+{
+    if (!m_claim)
+        return;
+    m_claim->fail(sessionError(QStringLiteral("the transfer no longer owns the port"), m_portName));
+    if (m_thread->isRunning()) {
+        QMetaObject::invokeMethod(
+            m_worker, [this] { m_worker->setClaim(nullptr); }, Qt::BlockingQueuedConnection);
+    }
+    m_claim.reset();
+    Q_EMIT streamClaimChanged(false);
 }
 
 // -- actions ---------------------------------------------------------------
@@ -153,6 +204,13 @@ QFuture<R> Session::runIo(F &&work)
 }
 
 template <typename R>
+QFuture<R> Session::streamBusy() const
+{
+    return QtFuture::makeExceptionalFuture<R>(std::make_exception_ptr(sessionError(
+        QStringLiteral("a file transfer is using %1").arg(m_portName), m_portName)));
+}
+
+template <typename R>
 QFuture<R> Session::notConnected() const
 {
     return QtFuture::makeExceptionalFuture<R>(std::make_exception_ptr(sessionError(
@@ -166,6 +224,8 @@ QFuture<qint64> Session::send(const QByteArray &data)
         return QtFuture::makeReadyValueFuture<qint64>(0);
     if (!isConnected())
         return notConnected<qint64>();
+    if (m_claim)
+        return streamBusy<qint64>();
     return runIo<qint64>([this, data]() -> qint64 {
         qint64 written = 0;
         try {
@@ -190,6 +250,8 @@ QFuture<BreakResult> Session::sendBreak(double duration, std::optional<BreakMode
 {
     if (!isConnected())
         return notConnected<BreakResult>();
+    if (m_claim)
+        return streamBusy<BreakResult>();
     const BreakMode chosen = mode.value_or(m_options.breakMode);
     return runIo<BreakResult>([this, duration, chosen] {
         try {

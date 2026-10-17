@@ -1,6 +1,7 @@
 #pragma once
 
-// Connection, terminal, logging and pacing settings (PRD F3, F9-F16).
+// Connection, terminal, logging, pacing and transfer settings (PRD F3,
+// F9-F20).
 //
 // Everything round-trips through the core's own types, so the dialog cannot
 // express a configuration the core would reject — validation happens as the
@@ -59,6 +60,10 @@ public:
     QLineEdit *waitForPrompt() const { return m_waitForPrompt; }
     QDoubleSpinBox *lineDelay() const { return m_lineDelay; }
     QComboBox *breakMode() const { return m_breakMode; }
+    QComboBox *transferProtocol() const { return m_transferProtocol; }
+    QLineEdit *transferDirectory() const { return m_transferDirectory; }
+    QComboBox *transferOverwrite() const { return m_transferOverwrite; }
+    QCheckBox *zmodemAutoStart() const { return m_zmodemAutoStart; }
 
     // OK, but only when everything is valid.
     void acceptIfValid();
@@ -68,6 +73,7 @@ private:
     QWidget *buildTerminal();
     QWidget *buildLogging();
     QWidget *buildPacing();
+    QWidget *buildTransfers();
     void validatePrompt(const QString &pattern);
     void updateTemplatePreview();
     static void select(QComboBox *combo, const QVariant &value);
@@ -110,6 +116,10 @@ private:
     QCheckBox *m_abortOnTimeout = nullptr;
     QComboBox *m_breakMode = nullptr;
     QDoubleSpinBox *m_breakDuration = nullptr;
+    QComboBox *m_transferProtocol = nullptr;
+    QLineEdit *m_transferDirectory = nullptr;
+    QComboBox *m_transferOverwrite = nullptr;
+    QCheckBox *m_zmodemAutoStart = nullptr;
 };
 
 } // namespace portside::gui

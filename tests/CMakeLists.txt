@@ -4,7 +4,8 @@
 add_library(portside_test_support STATIC
     support/support.h support/support.cpp
     support/socat_pair.h support/socat_pair.cpp
-    support/fake_switch.h support/fake_switch.cpp)
+    support/fake_switch.h support/fake_switch.cpp
+    support/pipe_channel.h support/pipe_channel.cpp)
 target_include_directories(portside_test_support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(portside_test_support PUBLIC portside_core Qt6::Test PRIVATE portside_warnings)
 
@@ -41,16 +42,22 @@ portside_add_test(tst_timestamps logging/tst_timestamps.cpp LABELS logging)
 portside_add_test(tst_session_log logging/tst_session_log.cpp LABELS logging)
 portside_add_test(tst_toml profiles/tst_toml.cpp LABELS profiles)
 portside_add_test(tst_profiles profiles/tst_profiles.cpp LABELS profiles)
+portside_add_test(tst_protocols transfer/tst_protocols.cpp LABELS transfer)
+portside_add_test(tst_transfer_job transfer/tst_transfer_job.cpp LABELS transfer)
 portside_add_test(tst_cli cli/tst_cli.cpp LIBS portside_cli_lib LABELS cli)
 add_dependencies(tst_cli portside)
 portside_add_test(tst_integration integration/tst_integration.cpp LIBS portside_cli_lib LABELS integration socat)
 add_dependencies(tst_integration portside)
+portside_add_test(tst_transfers integration/tst_transfers.cpp LABELS integration socat transfer)
+add_dependencies(tst_transfers portside)
+portside_add_test(tst_interop integration/tst_interop.cpp LABELS integration socat interop transfer)
 
 if(PORTSIDE_BUILD_GUI)
     portside_add_test(tst_gui_terminal_widget gui/tst_terminal_widget.cpp LIBS portside_gui_lib GUI)
     portside_add_test(tst_gui_session_view gui/tst_session_view.cpp LIBS portside_gui_lib GUI)
     portside_add_test(tst_gui_main_window gui/tst_main_window.cpp LIBS portside_gui_lib GUI)
     portside_add_test(tst_gui_dialogs gui/tst_dialogs.cpp LIBS portside_gui_lib GUI)
+    portside_add_test(tst_gui_transfers gui/tst_transfers.cpp LIBS portside_gui_lib GUI LABELS transfer)
     portside_add_test(tst_gui_nonfunctional gui/tst_nonfunctional.cpp LIBS portside_gui_lib GUI)
     add_dependencies(tst_gui_nonfunctional portside)
 endif()

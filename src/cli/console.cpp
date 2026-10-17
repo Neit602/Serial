@@ -67,6 +67,15 @@ bool Console::stdoutIsTty()
 #endif
 }
 
+bool Console::stderrIsTty()
+{
+#if defined(Q_OS_WIN)
+    return _isatty(_fileno(stderr)) != 0;
+#else
+    return ::isatty(STDERR_FILENO) != 0;
+#endif
+}
+
 void Console::enterRaw()
 {
     if (m_saved != nullptr || !stdinIsTty())

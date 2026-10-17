@@ -2,7 +2,9 @@
 
 #include "cli/console.h"
 #include "core/session.h"
+#include "core/transfer/job.h"
 
+#include <QDir>
 #include <QEventLoop>
 #include <QFutureWatcher>
 #include <QTimer>
@@ -34,8 +36,10 @@ PassThrough::PassThrough(Session *session, PassThroughOptions options, QObject *
         m_options.output = [](const QByteArray &bytes) { Console::writeOut(bytes); };
     if (!m_options.statusSink)
         m_options.statusSink = [](const QString &text) { Console::writeErr(text); };
-    connect(session, &Session::dataReceived, this,
-            [this](const QByteArray &bytes) { m_options.output(bytes); });
+    connect(session, &Session::dataReceived, this, [this](const QByteArray &bytes) {
+        m_options.output(bytes);
+        watchForZmodem(bytes);
+    });
     connect(session, &Session::stateChanged, this,
             [this](SessionState, SessionState state, const QString &) {
                 if (state == SessionState::Disconnected || state == SessionState::Closed)
@@ -84,6 +88,14 @@ void PassThrough::handleInput(const QByteArray &data)
 {
     if (m_stopping || m_finished || !m_session)
         return;
+    if (m_transfer) {
+        // The port belongs to the transfer; Ctrl-] or Ctrl-C stops it.
+        if (data.contains(kEscapeByte) || data.contains('\x03')) {
+            m_transfer->cancel();
+            status(QStringLiteral("[portside] cancelling the transfer..."));
+        }
+        return;
+    }
     QByteArray pending;
     QByteArray echo;
     for (const char byte : data) {
@@ -98,8 +110,8 @@ void PassThrough::handleInput(const QByteArray &data)
         if (m_options.interactive && byte == kEscapeByte) {
             sendNow(pending, echo);
             m_commandPending = true;
-            status(QStringLiteral("[portside] q quit · b break · d DTR · r RTS · ] send Ctrl-] · "
-                                  "any other key resumes"));
+            status(QStringLiteral("[portside] q quit · b break · d DTR · r RTS · z receive ZMODEM · "
+                                  "] send Ctrl-] · any other key resumes"));
             continue;
         }
         if (!m_options.translate) {
@@ -186,10 +198,84 @@ void PassThrough::handleCommand(char key)
         watcher->setFuture(dtr ? m_session->setDtr(value) : m_session->setRts(value));
         return;
     }
+    case 'z':
+    case 'Z':
+        receiveZmodem();
+        return;
     default:
         status(QStringLiteral("[portside] resumed"));
         return;
     }
+}
+
+void PassThrough::watchForZmodem(const QByteArray &data)
+{
+    if (m_transfer || !m_options.interactive)
+        return;
+    const auto event = m_detector.feed(data);
+    if (event == transfer::zmodem::StartDetector::Event::SenderReady)
+        status(QStringLiteral("\r\n[portside] the device is sending a file with ZMODEM: press "
+                              "Ctrl-] then z to receive it into %1")
+                   .arg(QDir::toNativeSeparators(downloadDirectory())));
+    else if (event == transfer::zmodem::StartDetector::Event::ReceiverReady)
+        status(QStringLiteral("\r\n[portside] the device is waiting for a ZMODEM file: quit, then "
+                              "run portside send PORT FILE"));
+}
+
+QString PassThrough::downloadDirectory() const
+{
+    return m_options.downloadDirectory.isEmpty() ? QDir::currentPath() : m_options.downloadDirectory;
+}
+
+void PassThrough::receiveZmodem()
+{
+    if (!m_session || m_transfer)
+        return;
+    TransferOptions options;
+    options.protocol = Protocol::Zmodem;
+    options.directory = downloadDirectory();
+    options.overwrite = m_options.overwrite;
+    auto *job = new TransferJob(m_session, TransferDirection::Receive, {}, options, this);
+    connect(job, &TransferJob::progressed, this, &PassThrough::showProgress);
+    connect(job, &TransferJob::finished, this, [this, job](const TransferResult &result) {
+        job->deleteLater();
+        for (const TransferredFile &file : result.files) {
+            status(file.skipped ? QStringLiteral("[portside] skipped %1: %2").arg(file.name, file.note)
+                                : QStringLiteral("[portside] saved %1")
+                                      .arg(QDir::toNativeSeparators(file.path)));
+        }
+        status(QStringLiteral("[portside] %1").arg(result.summary()));
+    });
+    connect(job, &TransferJob::failed, this, [this, job](const PortsideError &error) {
+        job->deleteLater();
+        status(error.kind() == ErrorKind::Cancelled
+                   ? QStringLiteral("[portside] transfer cancelled")
+                   : QStringLiteral("[portside] transfer failed: %1").arg(error.display()));
+    });
+    try {
+        job->start();
+    } catch (const PortsideError &error) {
+        delete job;
+        status(QStringLiteral("[portside] %1").arg(error.display()));
+        return;
+    }
+    m_transfer = job;
+    m_detector.reset();
+    status(QStringLiteral("[portside] receiving with ZMODEM into %1 (Ctrl-] cancels)")
+               .arg(QDir::toNativeSeparators(options.directory)));
+}
+
+void PassThrough::showProgress(const TransferProgress &progress)
+{
+    // A line every couple of seconds is plenty in a terminal.
+    const qint64 now = qint64(progress.seconds * 1000.0);
+    if (progress.file.isEmpty() || (now - m_lastProgress < 2000 && progress.fileBytes != progress.fileSize))
+        return;
+    m_lastProgress = now;
+    status(progress.fileSize > 0
+               ? QStringLiteral("[portside] %1: %2 of %3").arg(progress.file, formatBytes(progress.fileBytes),
+                                                               formatBytes(progress.fileSize))
+               : QStringLiteral("[portside] %1: %2").arg(progress.file, formatBytes(progress.fileBytes)));
 }
 
 void PassThrough::handleEndOfInput()

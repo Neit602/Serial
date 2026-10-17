@@ -16,9 +16,11 @@
 
 #include <atomic>
 #include <deque>
+#include <memory>
 
 namespace portside {
 
+class StreamClaim;
 class Transport;
 
 class SessionWorker : public QObject
@@ -46,6 +48,14 @@ public:
     // Close the current transport; called once, at session close.
     void shutdown() noexcept;
 
+    // Route received bytes to a file transfer instead of the receive buffer
+    // (or back, with nullptr).  Whatever is already buffered goes with them:
+    // a receiver's first 'C' may have arrived before the claim did.
+    void setClaim(std::shared_ptr<StreamClaim> claim);
+    // Write for the claim: queue, then wait until the driver has the bytes.
+    // Throws PortsideError.
+    void writeClaimed(const QByteArray &data);
+
     // Any thread: everything received since the last call, oldest first, and
     // the number of bytes dropped since then because the buffer was full.
     QByteArray takeReceived(qint64 *dropped);
@@ -54,11 +64,16 @@ Q_SIGNALS:
     // The receive buffer went from empty to non-empty.
     void received();
     void transportFailed(const portside::PortsideError &error, quint64 generation);
+    // A copy of what went to the claim, and how much it wrote, for the
+    // session's counters and raw logs.
+    void claimedReceived(const QByteArray &data);
+    void claimedWritten(qint64 count);
 
 private:
     void onReadyRead();
 
     Transport *m_current = nullptr;
+    std::shared_ptr<StreamClaim> m_claim;
     quint64 m_generation = 0;
     bool m_failureReported = false;
 

@@ -295,6 +295,37 @@ private Q_SLOTS:
         QCOMPARE(shown, QByteArray("ab\b \b\r\n"));
     }
 
+    void theDeviceRunningSzIsOfferedAndCtrlBracketZReceives()
+    {
+        LoopbackOptions options;
+        options.echo = false;
+        auto made = makeLoopbackSession(options);
+        made.session->open();
+        QTemporaryDir dir;
+        QStringList status;
+        PassThroughOptions pumpOptions;
+        pumpOptions.interactive = true;
+        pumpOptions.downloadDirectory = dir.path();
+        pumpOptions.output = [](const QByteArray &) {};
+        pumpOptions.statusSink = [&](const QString &text) { status << text; };
+        PassThrough pump(made.session.get(), pumpOptions);
+        made.transport->feed("rz\r**\x18" "B00000000000000\r\x8a\x11");
+        QVERIFY(waitFor([&] { return status.join(QLatin1Char('\n')).contains(QStringLiteral("Ctrl-] then z")); }));
+        pump.handleInput("\x1d" "z");
+        QVERIFY(made.session->isStreamClaimed());
+        QVERIFY(status.last().contains(QStringLiteral("receiving with ZMODEM")));
+        // Typing does not reach the device; Ctrl-] cancels.
+        pump.handleInput("abc");
+        pump.handleInput("\x1d");
+        QVERIFY(waitFor([&] { return !made.session->isStreamClaimed(); }, 5000));
+        QVERIFY(waitFor([&] { return status.last().contains(QStringLiteral("cancelled")); }));
+        QVERIFY(!made.transport->written().contains("abc"));
+        QVERIFY(made.transport->written().contains(QByteArray(5, '\x18')));
+        // And the terminal has the port back.
+        pump.handleInput("show ver\r");
+        QVERIFY(waitFor([&] { return made.transport->written().endsWith("show ver\r"); }));
+    }
+
     void theSessionEndingEndsThePump()
     {
         auto made = makeLoopbackSession();

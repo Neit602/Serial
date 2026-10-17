@@ -90,6 +90,22 @@ public:
     // Save the active session as a named profile (asks when `name` is empty).
     std::optional<Profile> saveSessionAsProfile(const QString &name = {});
 
+    // -- file transfers (F17–F19) --------------------------------------------
+
+    // Send `files` over the active session with `protocol`; when either is
+    // missing the transfer dialog asks.  False when nothing started.
+    bool sendFiles(const QStringList &files = {}, std::optional<Protocol> protocol = std::nullopt);
+    // Receive with `options`; without them the transfer dialog asks.
+    bool receiveFiles(const std::optional<TransferOptions> &options = std::nullopt);
+    void cancelTransfer();
+
+    // What a file dropped on the window does (F13, F19).
+    enum class DropAction { Paste, Send, Ignore };
+    // Asks; with dialogs off, answers what setDropAction() said.
+    DropAction askDropAction(const QStringList &paths);
+    void setDropAction(DropAction action) { m_dropAction = action; }
+    void dropFiles(const QStringList &paths);
+
     // -- appearance and messages --------------------------------------------
 
     void applyTheme(ThemeName name);
@@ -131,6 +147,7 @@ private:
     void buildMenus();
     void buildToolbar();
     void attachView(SessionView *view);
+    void onZmodemRequested(SessionView *view, bool deviceSends);
     void onStatus(const QString &text);
     void notify(const QString &message);
     bool confirm(const QString &title, const QString &question);
@@ -145,6 +162,9 @@ private:
     QString m_lastMessage;
     bool m_interactive = true;
     bool m_answer = true;
+    DropAction m_dropAction = DropAction::Paste;
+    // A ZMODEM prompt is open; sz repeating itself must not stack another.
+    bool m_zmodemPrompt = false;
 
     QTabWidget *m_tabs = nullptr;
     DeviceList *m_deviceList = nullptr;

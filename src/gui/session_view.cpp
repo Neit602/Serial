@@ -4,7 +4,9 @@
 #include "gui/session_controller.h"
 #include "gui/signals_panel.h"
 #include "gui/terminal_widget.h"
+#include "gui/transfer_dialog.h"
 
+#include <QDir>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -48,6 +50,10 @@ SessionView::SessionView(SessionController *controller, ThemeName theme, QWidget
     m_pasteProgress->setVisible(false);
     m_pasteProgress->setAccessibleName(tr("Paste progress"));
     layout->addWidget(m_pasteProgress);
+
+    m_transferPanel = buildTransferPanel();
+    m_transferPanel->setVisible(false);
+    layout->addWidget(m_transferPanel);
 
     auto *bottom = new QWidget(this);
     auto *bottomLayout = new QHBoxLayout(bottom);
@@ -98,6 +104,39 @@ SessionView::SessionView(SessionController *controller, ThemeName theme, QWidget
         m_notice = result.describe();
         updateStatus();
     });
+
+    connect(controller, &SessionController::transferStarted, this, [this] {
+        const TransferJob *job = m_controller->transfer();
+        const bool sending = job->direction() == TransferDirection::Send;
+        m_transferTitle->setText(sending ? tr("Sending with %1…").arg(protocolTitle(job->options().protocol))
+                                         : tr("Receiving with %1 into %2…")
+                                               .arg(protocolTitle(job->options().protocol),
+                                                    QDir::toNativeSeparators(job->options().directory)));
+        m_transferStats->setText(transferHint(job->options().protocol, job->direction()));
+        m_transferFileBar->setRange(0, 0);
+        m_transferTotalBar->setVisible(false);
+        m_transferPanel->setVisible(true);
+        m_transferNote = sending ? tr("sending") : tr("receiving");
+        updateStatus();
+        Q_EMIT transferStateChanged();
+    });
+    connect(controller, &SessionController::transferProgress, this, &SessionView::showTransferProgress);
+    connect(controller, &SessionController::transferFinished, this, [this](const TransferResult &result) {
+        m_transferPanel->setVisible(false);
+        m_transferNote.clear();
+        m_notice = result.summary();
+        updateStatus();
+        Q_EMIT transferStateChanged();
+    });
+    connect(controller, &SessionController::transferFailed, this, [this](const PortsideError &error) {
+        m_transferPanel->setVisible(false);
+        m_transferNote.clear();
+        m_notice = error.kind() == ErrorKind::Cancelled ? tr("transfer cancelled")
+                                                        : tr("transfer failed: %1").arg(error.message());
+        updateStatus();
+        Q_EMIT transferStateChanged();
+    });
+    connect(controller, &SessionController::zmodemRequested, this, &SessionView::zmodemRequested);
 
     connect(m_signals, &SignalsPanel::dtrToggled, this, [this](bool value) {
         m_controller->session()->setDtr(value).then(this, [this](QFuture<bool> done) {
@@ -243,6 +282,88 @@ void SessionView::scrollToMatch()
     updateStatus();
 }
 
+// -- file transfers ---------------------------------------------------------------
+
+QWidget *SessionView::buildTransferPanel()
+{
+    auto *panel = new QWidget(this);
+    panel->setAccessibleName(tr("File transfer"));
+    auto *layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(6, 4, 6, 4);
+    auto *top = new QHBoxLayout;
+    m_transferTitle = new QLabel(panel);
+    m_transferTitle->setAccessibleName(tr("Transfer"));
+    top->addWidget(m_transferTitle, 1);
+    m_transferCancel = new QPushButton(tr("Cancel transfer"), panel);
+    m_transferCancel->setAccessibleName(tr("Cancel transfer"));
+    connect(m_transferCancel, &QPushButton::clicked, this, [this] { m_controller->cancelTransfer(); });
+    top->addWidget(m_transferCancel);
+    layout->addLayout(top);
+    m_transferFileBar = new QProgressBar(panel);
+    m_transferFileBar->setAccessibleName(tr("This file"));
+    layout->addWidget(m_transferFileBar);
+    m_transferTotalBar = new QProgressBar(panel);
+    m_transferTotalBar->setAccessibleName(tr("All files"));
+    m_transferTotalBar->setFormat(tr("all files: %p%"));
+    layout->addWidget(m_transferTotalBar);
+    m_transferStats = new QLabel(panel);
+    m_transferStats->setAccessibleName(tr("Transfer details"));
+    m_transferStats->setWordWrap(true);
+    layout->addWidget(m_transferStats);
+    return panel;
+}
+
+void SessionView::showTransferProgress(const TransferProgress &progress)
+{
+    const TransferJob *job = m_controller->transfer();
+    if (job == nullptr || progress.file.isEmpty())
+        return;
+    const bool sending = job->direction() == TransferDirection::Send;
+    QString which = progress.file;
+    if (progress.fileCount > 1)
+        which = tr("%1 (file %2 of %3)").arg(progress.file).arg(progress.fileIndex).arg(progress.fileCount);
+    else if (progress.fileIndex > 1)
+        which = tr("%1 (file %2)").arg(progress.file).arg(progress.fileIndex);
+    m_transferTitle->setText((sending ? tr("Sending %1 with %2") : tr("Receiving %1 with %2"))
+                                 .arg(which, protocolTitle(job->options().protocol)));
+    // Percentages in thousandths, so a 4 GB file still fits an int.
+    if (progress.fileSize > 0) {
+        m_transferFileBar->setRange(0, 1000);
+        m_transferFileBar->setValue(int(1000 * progress.fileBytes / progress.fileSize));
+    } else if (progress.fileSize == 0) {
+        m_transferFileBar->setRange(0, 1);
+        m_transferFileBar->setValue(1);
+    } else {
+        // XMODEM: no size to measure against.
+        m_transferFileBar->setRange(0, 0);
+    }
+    const bool overall = progress.totalSize > 0 && progress.fileCount > 1;
+    m_transferTotalBar->setVisible(overall);
+    if (overall) {
+        m_transferTotalBar->setRange(0, 1000);
+        m_transferTotalBar->setValue(int(1000 * progress.totalBytes / progress.totalSize));
+    }
+    QStringList stats;
+    stats << (progress.fileSize >= 0 ? tr("%1 of %2").arg(formatBytes(progress.fileBytes),
+                                                          formatBytes(progress.fileSize))
+                                     : formatBytes(progress.fileBytes));
+    if (progress.bytesPerSecond() > 0) {
+        stats << tr("%1/s").arg(formatBytes(qint64(progress.bytesPerSecond())));
+        if (progress.fileSize > 0 && progress.fileBytes < progress.fileSize) {
+            const double left = double(progress.fileSize - progress.fileBytes) / progress.bytesPerSecond();
+            stats << tr("about %1 s left").arg(qRound(left));
+        }
+    }
+    if (progress.retries > 0)
+        stats << tr("%n retries", nullptr, progress.retries);
+    m_transferStats->setText(stats.join(QStringLiteral(" · ")));
+    m_transferNote = progress.fileSize > 0
+                         ? tr("%1 %2%").arg(sending ? tr("sending") : tr("receiving"))
+                               .arg(int(100 * progress.fileBytes / progress.fileSize))
+                         : (sending ? tr("sending") : tr("receiving"));
+    m_statusDirty = true;
+}
+
 // -- session events ---------------------------------------------------------------
 
 void SessionView::onData(const QByteArray &bytes)
@@ -287,6 +408,12 @@ void SessionView::onKey(QKeyEvent *event)
         keyToBytes(*event, m_controller->textPolicy(), m_terminal->applicationCursorKeys());
     if (payload.isEmpty())
         return;
+    if (m_controller->isTransferring()) {
+        // The port belongs to the transfer; keys would corrupt it.
+        m_notice = tr("typing is paused while a file transfer runs");
+        updateStatus();
+        return;
+    }
     // Typing returns the view to the live tail.
     m_terminal->follow();
     if (m_controller->textPolicy().localEcho)
@@ -350,6 +477,8 @@ QString SessionView::statusText() const
         parts << enumName(m_view->viewMode()).toUpper();
     if (!m_pasteNote.isEmpty())
         parts << m_pasteNote;
+    if (!m_transferNote.isEmpty())
+        parts << m_transferNote;
     parts << (m_notice.isEmpty() ? enumName(m_controller->state()) : m_notice);
     parts.removeAll(QString());
     return parts.join(QStringLiteral(" · "));

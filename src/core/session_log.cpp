@@ -143,6 +143,14 @@ void SessionLogger::attach(Session *session)
     detach();
     m_connections << QObject::connect(session, &Session::dataReceived, session,
                                       [this](const QByteArray &data) { write(data); });
+    // A file transfer's bytes belong in a raw log, which stays byte-exact; a
+    // text log gets a note from the front end instead of a megabyte of
+    // mojibake (DECISIONS D56).
+    m_connections << QObject::connect(session, &Session::claimedDataReceived, session,
+                                      [this](const QByteArray &data) {
+                                          if (m_settings.format == LogFormat::Raw)
+                                              write(data);
+                                      });
     m_connections << QObject::connect(
         session, &Session::stateChanged, session,
         [this](SessionState, SessionState state, const QString &) {

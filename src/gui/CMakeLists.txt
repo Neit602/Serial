@@ -11,6 +11,7 @@ add_library(portside_gui_lib STATIC
     session_view.h session_view.cpp
     settings_dialog.h settings_dialog.cpp
     profiles_dialog.h profiles_dialog.cpp
+    transfer_dialog.h transfer_dialog.cpp
     main_window.h main_window.cpp
 )
 target_link_libraries(portside_gui_lib

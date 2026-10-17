@@ -325,3 +325,63 @@ unknown font family falls back to the system monospace font.
 ### D51. Version 0.2.0 marks the rewrite
 The CLI, the profile format and the exit codes are unchanged; the minor version bump says
 the implementation underneath is new.
+
+## M4 — file transfers
+
+### D52. Received files never silently overwrite
+The default overwrite policy is *refuse*. ZMODEM answers an existing name with ZSKIP and
+Kermit declines the file in its attribute (or data) acknowledgement, so the rest of a batch
+still arrives; XMODEM and YMODEM have no way to skip a file, so they stop with a message
+that names the file and the fix. A profile (or `--overwrite`) can choose *rename*
+(`name.1.ext`, `name.2.ext`, …) or *overwrite*. The CLI exits 1 when any file was skipped.
+
+### D53. Downloads go to `NAME.part` and are renamed when complete
+A broken transfer never leaves a file that looks finished. The modification time the sender
+supplied (YMODEM, ZMODEM, Kermit) is applied after the rename. Names from the device are
+reduced to their last path component and made safe for every filesystem (no `..`, no
+directories, no Windows device names), so a device cannot write outside the chosen folder.
+
+### D54. ZMODEM's ZCOMMAND is refused, always
+A ZMODEM sender may ask the receiver to run a shell command. Portside never does: the
+transfer stops with an error naming ZCOMMAND, and the device gets ZMODEM's cancel. Also not
+implemented: sender-side crash recovery, compression and encryption. The receiver resumes
+an interrupted download only when asked (`--resume`, the dialog's checkbox, or the sender's
+ZCRESUM flag); ZMODEM keeps its `.part` file after a failure so that a resume is possible.
+
+### D55. Kermit: long packets and attributes, no sliding windows or streaming
+Packets up to 4,096 bytes when both sides offer them, type 1/2/3 block checks (type 3
+preferred), control/8th-bit/repeat prefixing and attribute packets (size, date, binary
+type). Sliding windows and streaming are not offered: on a serial console the gain is small
+and the complexity is not. Transfers are always binary.
+
+### D56. Logs during a transfer
+While a transfer holds the port, a raw log still records every byte from the wire; a text
+log gets one note when the transfer starts and one when it ends (its summary or error),
+rather than a megabyte of protocol mojibake.
+
+### D57. The port belongs to the transfer while it runs
+Starting a transfer claims the session's byte stream: received bytes go to the protocol,
+not the terminal, and the terminal's keys, pastes and breaks are refused until it ends. The
+GUI shows the transfer in a panel inside the session's tab (file, per-file and overall
+progress, speed, retries, cancel) rather than in a modal dialog, so other sessions stay
+usable. In `portside connect`, `Ctrl-]` (or `Ctrl-C`) cancels a running receive.
+
+### D58. Every protocol is in-house
+The PRD's stack table named a Python `xmodem` package for XMODEM. The C++ port implements
+XMODEM, YMODEM, ZMODEM and Kermit itself, sharing one block framing for XMODEM and YMODEM;
+interoperability is checked against lrzsz and G-Kermit/C-Kermit (`tests/integration/tst_interop.cpp`).
+Engines are plain blocking code on a thread of their own, talking to the session through
+the claimed stream, so the GUI and the I/O thread never wait on a protocol timeout.
+
+### D59. Where downloads go
+The desktop app saves into the user's Downloads folder; `portside receive` into the current
+directory, as command-line tools do. A profile's `[transfer] directory` overrides both, and
+`--into` overrides the profile.
+
+### D60. ZMODEM auto-start
+The terminal watches for ZRQINIT (`**\x18B00`, the device ran `sz`) and ZRINIT
+(`**\x18B01`, it ran `rz`). The desktop app offers to receive (or asks what to send);
+declining sends ZMODEM's cancel so the device does not wait a minute for nothing.
+`portside connect` prints a hint and receives on `Ctrl-]` `z`. The offer can be turned off
+per profile (`zmodem_auto_start = false`), and is not repeated for five seconds after a
+transfer, because a cancelled `sz` keeps knocking for a while.

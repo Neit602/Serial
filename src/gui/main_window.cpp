@@ -8,6 +8,7 @@
 #include "gui/settings_dialog.h"
 #include "gui/styles.h"
 #include "gui/terminal_widget.h"
+#include "gui/transfer_dialog.h"
 
 #include <QAction>
 #include <QApplication>
@@ -140,6 +141,14 @@ void MainWindow::buildActions()
     makeAction(QStringLiteral("paste-file"), tr("Paste &file…"), QStringLiteral("Ctrl+Shift+V"), nullptr);
     connect(m_actions.value(QStringLiteral("paste-file")), &QAction::triggered, this, [this] { pasteFile(); });
     makeAction(QStringLiteral("find"), tr("&Find…"), QStringLiteral("Ctrl+F"), &MainWindow::openFind);
+    makeAction(QStringLiteral("send-file"), tr("&Send file…"), QStringLiteral("Ctrl+Shift+S"), nullptr,
+               tr("Send files with XMODEM, YMODEM, ZMODEM, Kermit or raw"));
+    connect(m_actions.value(QStringLiteral("send-file")), &QAction::triggered, this, [this] { sendFiles(); });
+    makeAction(QStringLiteral("receive-file"), tr("&Receive file…"), QStringLiteral("Ctrl+Shift+R"),
+               nullptr, tr("Receive files with XMODEM, YMODEM, ZMODEM or Kermit"));
+    connect(m_actions.value(QStringLiteral("receive-file")), &QAction::triggered, this,
+            [this] { receiveFiles(); });
+    makeAction(QStringLiteral("cancel-transfer"), tr("&Cancel transfer"), {}, &MainWindow::cancelTransfer);
     makeAction(QStringLiteral("break"), tr("Send &break"), QStringLiteral("Ctrl+B"), &MainWindow::sendBreak);
     makeAction(QStringLiteral("log"), tr("&Logging"), QStringLiteral("Ctrl+L"), &MainWindow::toggleLogging)
         ->setCheckable(true);
@@ -182,6 +191,9 @@ void MainWindow::buildMenus()
          QStringLiteral("settings"), QStringLiteral("profiles"), QStringLiteral("save-profile")});
     add(menuBar()->addMenu(tr("&Session")),
         {QStringLiteral("break"), QStringLiteral("log"), QStringLiteral("hex"), QStringLiteral("clear")});
+    add(menuBar()->addMenu(tr("&Transfer")),
+        {QStringLiteral("send-file"), QStringLiteral("receive-file"), QString(),
+         QStringLiteral("cancel-transfer")});
     QMenu *view = menuBar()->addMenu(tr("&View"));
     QMenu *themes = view->addMenu(tr("&Theme"));
     for (const ThemeName name : {ThemeName::Dark, ThemeName::Light, ThemeName::HighContrast})
@@ -195,7 +207,8 @@ void MainWindow::buildToolbar()
     m_toolbar = addToolBar(tr("Main"));
     m_toolbar->setObjectName(QStringLiteral("main-toolbar"));
     m_toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    for (const char *name : {"connect", "disconnect", "break", "paste-file", "log", "hex", "find"})
+    for (const char *name : {"connect", "disconnect", "break", "paste-file", "send-file",
+                             "receive-file", "log", "hex", "find"})
         m_toolbar->addAction(m_actions.value(QString::fromLatin1(name)));
 }
 
@@ -306,6 +319,9 @@ void MainWindow::attachView(SessionView *view)
 {
     connect(view, &SessionView::statusChanged, this, &MainWindow::onStatus);
     connect(view, &SessionView::errorRaised, this, &MainWindow::showError);
+    connect(view, &SessionView::transferStateChanged, this, &MainWindow::updateActions);
+    connect(view, &SessionView::zmodemRequested, this,
+            [this, view](bool deviceSends) { onZmodemRequested(view, deviceSends); });
 }
 
 void MainWindow::closeTab(int index)
@@ -515,6 +531,151 @@ std::optional<Profile> MainWindow::saveSessionAsProfile(const QString &name)
     return profile;
 }
 
+// -- file transfers ------------------------------------------------------------------
+
+bool MainWindow::sendFiles(const QStringList &files, std::optional<Protocol> protocol)
+{
+    SessionView *view = currentView();
+    if (view == nullptr)
+        return false;
+    SessionController *controller = view->controller();
+    TransferOptions options = controller->transferOptions(protocol);
+    QStringList chosen = files;
+    if (chosen.isEmpty() || !protocol) {
+        if (!m_interactive) {
+            m_lastMessage = tr("Choose the files and protocol to send.");
+            return false;
+        }
+        TransferDialog dialog(TransferDirection::Send, options, chosen, this);
+        if (dialog.exec() != QDialog::Accepted)
+            return false;
+        options = dialog.options();
+        chosen = dialog.files();
+    }
+    const bool started = controller->startTransfer(TransferDirection::Send, chosen, options);
+    if (started)
+        notify(tr("%1: waiting for the device to receive…").arg(protocolTitle(options.protocol)));
+    updateActions();
+    return started;
+}
+
+bool MainWindow::receiveFiles(const std::optional<TransferOptions> &options)
+{
+    SessionView *view = currentView();
+    if (view == nullptr)
+        return false;
+    SessionController *controller = view->controller();
+    TransferOptions chosen = options.value_or(controller->transferOptions());
+    if (!options) {
+        if (!m_interactive) {
+            m_lastMessage = tr("Choose the protocol and folder to receive into.");
+            return false;
+        }
+        TransferDialog dialog(TransferDirection::Receive, chosen, {}, this);
+        if (dialog.exec() != QDialog::Accepted)
+            return false;
+        chosen = dialog.options();
+    }
+    const bool started = controller->startTransfer(TransferDirection::Receive, {}, chosen);
+    if (started)
+        notify(tr("%1: waiting for the device to send…").arg(protocolTitle(chosen.protocol)));
+    updateActions();
+    return started;
+}
+
+void MainWindow::cancelTransfer()
+{
+    if (SessionView *view = currentView())
+        view->controller()->cancelTransfer();
+}
+
+void MainWindow::onZmodemRequested(SessionView *view, bool deviceSends)
+{
+    SessionController *controller = view->controller();
+    if (m_zmodemPrompt || controller->isTransferring())
+        return;
+    m_zmodemPrompt = true;
+    // The device's sz or rz is waiting; a refusal should stop it rather than
+    // leave it knocking for a minute.
+    const auto refuse = [controller] {
+        controller->send(QByteArray(10, '\x18') + QByteArray(10, '\b'));
+    };
+    if (deviceSends) {
+        const TransferOptions options = controller->transferOptions(Protocol::Zmodem);
+        if (confirm(tr("Receive file"),
+                    tr("The device on %1 is sending a file with ZMODEM.\n\nSave it in %2?")
+                        .arg(controller->port(), QDir::toNativeSeparators(options.directory))))
+            controller->startTransfer(TransferDirection::Receive, {}, options);
+        else
+            refuse();
+    } else {
+        QStringList files;
+        if (m_interactive)
+            files = QFileDialog::getOpenFileNames(
+                this, tr("The device is waiting for a file (ZMODEM) — choose what to send"));
+        else
+            m_lastMessage = tr("The device is waiting for a ZMODEM file.");
+        if (!files.isEmpty())
+            controller->startTransfer(TransferDirection::Send, files,
+                                      controller->transferOptions(Protocol::Zmodem));
+        else if (m_interactive)
+            refuse();
+    }
+    m_zmodemPrompt = false;
+    updateActions();
+}
+
+MainWindow::DropAction MainWindow::askDropAction(const QStringList &paths)
+{
+    if (!m_interactive)
+        return m_dropAction;
+    SessionView *view = currentView();
+    const Protocol protocol = view != nullptr ? view->controller()->transferOptions().protocol
+                                              : Protocol::Zmodem;
+    QMessageBox box(this);
+    box.setWindowTitle(tr("Dropped file"));
+    box.setIcon(QMessageBox::Question);
+    box.setText(paths.size() == 1
+                    ? tr("What should Portside do with %1?").arg(QFileInfo(paths.first()).fileName())
+                    : tr("What should Portside do with these %1 files?").arg(paths.size()));
+    box.setInformativeText(tr("Paste types the text at the session's pace. Send transfers the "
+                              "file with a protocol, for a device running a receiver."));
+    QPushButton *paste = box.addButton(tr("&Paste as text"), QMessageBox::AcceptRole);
+    QPushButton *send = box.addButton(tr("&Send with %1…").arg(protocolTitle(protocol)),
+                                      QMessageBox::ActionRole);
+    box.addButton(QMessageBox::Cancel);
+    // Pasting several files makes no sense; sending them does.
+    paste->setEnabled(paths.size() == 1);
+    box.setDefaultButton(paths.size() == 1 ? paste : send);
+    box.exec();
+    if (box.clickedButton() == paste)
+        return DropAction::Paste;
+    if (box.clickedButton() == send)
+        return DropAction::Send;
+    return DropAction::Ignore;
+}
+
+void MainWindow::dropFiles(const QStringList &paths)
+{
+    if (paths.isEmpty() || currentView() == nullptr)
+        return;
+    switch (askDropAction(paths)) {
+    case DropAction::Paste:
+        pasteFile(paths.first());
+        break;
+    case DropAction::Send: {
+        // Through the dialog when interactive, so the protocol can change.
+        const auto protocol = m_interactive ? std::nullopt
+                                            : std::optional<Protocol>(
+                                                  currentView()->controller()->transferOptions().protocol);
+        sendFiles(paths, protocol);
+        break;
+    }
+    case DropAction::Ignore:
+        break;
+    }
+}
+
 // -- appearance ---------------------------------------------------------------------
 
 void MainWindow::applyTheme(ThemeName name)
@@ -601,9 +762,16 @@ void MainWindow::updateActions()
     SessionView *view = currentView();
     const bool active = view != nullptr;
     for (const char *name : {"disconnect", "detach", "settings", "save-profile", "copy", "paste-file",
-                             "find", "break", "log", "hex", "clear"}) {
+                             "find", "break", "log", "hex", "clear", "send-file", "receive-file"}) {
         m_actions.value(QString::fromLatin1(name))->setEnabled(active);
     }
+    // While a transfer owns the port, nothing else may write to it.
+    const bool transferring = active && view->controller()->isTransferring();
+    for (const char *name : {"paste-file", "break", "send-file", "receive-file"}) {
+        if (transferring)
+            m_actions.value(QString::fromLatin1(name))->setEnabled(false);
+    }
+    m_actions.value(QStringLiteral("cancel-transfer"))->setEnabled(transferring);
     m_actions.value(QStringLiteral("connect"))->setEnabled(m_deviceList->selectedPort().has_value());
     if (active) {
         m_actions.value(QStringLiteral("log"))->setChecked(view->controller()->isLogging());
@@ -643,15 +811,17 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
-    const QList<QUrl> urls = event->mimeData()->urls();
-    if (urls.isEmpty())
-        return;
-    // Dropping a file pastes it at the session's pace.
-    const QString path = urls.first().toLocalFile();
-    if (QFileInfo(path).isFile()) {
-        pasteFile(path);
-        event->acceptProposedAction();
+    QStringList paths;
+    for (const QUrl &url : event->mimeData()->urls()) {
+        const QString path = url.toLocalFile();
+        if (QFileInfo(path).isFile())
+            paths << path;
     }
+    if (paths.isEmpty())
+        return;
+    event->acceptProposedAction();
+    // Queued: the drag must finish before a dialog opens.
+    QMetaObject::invokeMethod(this, [this, paths] { dropFiles(paths); }, Qt::QueuedConnection);
 }
 
 // -- geometry and shutdown -------------------------------------------------------------

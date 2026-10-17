@@ -27,6 +27,8 @@ enum class ErrorKind {
     NotSupported,     // the driver lacks the feature (native break, ...)
     Session,          // the session's state does not allow the request
     Profile,          // a profile could not be read, written or understood
+    Transfer,         // a file transfer failed: protocol error, timeout, peer gave up
+    Cancelled,        // the user cancelled a file transfer
 };
 
 class PortsideError : public std::exception
@@ -67,6 +69,11 @@ inline PortsideError invalidSettings(const QString &message)
 inline PortsideError sessionError(const QString &message, const QString &port = {})
 {
     return PortsideError(ErrorKind::Session, message, port);
+}
+
+inline PortsideError transferError(const QString &message, const QString &remedy = {})
+{
+    return PortsideError(ErrorKind::Transfer, message, {}, remedy);
 }
 
 inline PortsideError profileError(const QString &message, const QString &remedy = {})

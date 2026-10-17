@@ -196,6 +196,12 @@ QString Profile::toToml() const
     w.value(QStringLiteral("max_bytes"), logging.maxBytes);
     w.value(QStringLiteral("keep"), logging.keep);
 
+    w.table(QStringLiteral("transfer"));
+    w.value(QStringLiteral("protocol"), enumName(transfer.protocol));
+    w.value(QStringLiteral("directory"), transfer.directory);
+    w.value(QStringLiteral("overwrite"), enumName(transfer.overwrite));
+    w.value(QStringLiteral("zmodem_auto_start"), transfer.zmodemAutoStart);
+
     w.table(QStringLiteral("break"));
     w.value(QStringLiteral("mode"), enumName(breakMode));
     w.value(QStringLiteral("duration"), breakDuration);
@@ -276,6 +282,14 @@ Profile Profile::fromMap(const QVariantMap &data)
     logging.autoStart = logs.boolean(QStringLiteral("auto_start"), false);
     logging.maxBytes = logs.integer(QStringLiteral("max_bytes"), 0);
     logging.keep = int(logs.integer(QStringLiteral("keep"), 5));
+
+    // Profiles from before M4 have no [transfer] table; the defaults apply.
+    const Fields transfers = table(data, QStringLiteral("transfer"));
+    profile.transfer.protocol = transfers.choice(QStringLiteral("protocol"), Protocol::Zmodem);
+    profile.transfer.directory = transfers.string(QStringLiteral("directory"), {});
+    profile.transfer.overwrite =
+        transfers.choice(QStringLiteral("overwrite"), OverwritePolicy::Refuse);
+    profile.transfer.zmodemAutoStart = transfers.boolean(QStringLiteral("zmodem_auto_start"), true);
 
     const Fields breaks = table(data, QStringLiteral("break"));
     profile.breakMode = breaks.choice(QStringLiteral("mode"), BreakMode::Auto);

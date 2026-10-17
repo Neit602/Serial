@@ -288,6 +288,15 @@
         <li><a href="#cli-scripts">Scripting</a></li>
       </ol>
     </li>
+    <li><a href="#transfers">File transfers</a>
+      <ol>
+        <li><a href="#xfer-protocols">Choosing a protocol</a></li>
+        <li><a href="#xfer-gui">In the desktop app</a></li>
+        <li><a href="#xfer-auto">ZMODEM auto-start</a></li>
+        <li><a href="#xfer-cli">From the command line</a></li>
+        <li><a href="#xfer-files">Where files go</a></li>
+      </ol>
+    </li>
     <li><a href="#profiles">Profiles</a></li>
     <li><a href="#logs">Log files</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
@@ -306,7 +315,7 @@
   <div class="tags">
     <span class="tag">Linux</span><span class="tag">macOS</span><span class="tag">Windows</span>
     <span class="tag">VT100 / xterm</span><span class="tag">Break &amp; ROMMON</span>
-    <span class="tag">Paced paste</span><span class="tag">Session logs</span><span class="tag">Profiles</span>
+    <span class="tag">Paced paste</span><span class="tag">File transfers</span><span class="tag">Session logs</span><span class="tag">Profiles</span>
   </div>
 </header>
 
@@ -326,6 +335,9 @@
     <div class="card"><h4>Pastes configs safely</h4>
       <p>Feeds a file to the device line by line, with delays or by waiting for the
       prompt, so slow network gear doesn't drop characters.</p></div>
+    <div class="card"><h4>Transfers files</h4>
+      <p>Sends and receives files with XMODEM, YMODEM, ZMODEM and Kermit — firmware into a
+      bootloader, configs off a board — and notices when the device runs <code>sz</code>.</p></div>
     <div class="card"><h4>Records sessions</h4>
       <p>Logs as readable text with optional timestamps, or as the exact raw bytes, with
       automatic file names and size-based rotation.</p></div>
@@ -403,8 +415,8 @@ portside connect /dev/ttyUSB0 --baud 9600      <span class="c"># COM3 on Windows
 
   <h3 id="gui-window">The window</h3>
   <div class="window" role="img" aria-label="Schematic of the Portside main window">
-    <div class="bar"><b>File</b><b>Edit</b><b>Session</b><b>View</b><b>Help</b>
-      <span>| Connect · Disconnect · Send break · Paste file · Logging · Hex view · Find</span></div>
+    <div class="bar"><b>File</b><b>Edit</b><b>Session</b><b>Transfer</b><b>View</b><b>Help</b>
+      <span>| Connect · Disconnect · Send break · Paste file · Send file · Receive file · Logging · Hex view · Find</span></div>
     <div class="body">
       <div class="devices">
         <div class="sel">/dev/ttyUSB0 &nbsp;FTDI FT232R</div>
@@ -481,8 +493,9 @@ portside connect /dev/ttyUSB0 --baud 9600      <span class="c"># COM3 on Windows
   <strong>Session settings ▸ Paste &amp; break</strong>.</p>
 
   <h3 id="gui-paste">Pasting configurations</h3>
-  <p>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> and choose a file — or simply drag a file onto the
-  window. Portside sends it line by line at the pace set in the profile, with a progress bar,
+  <p>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> and choose a file — or drag a file onto the
+  window and choose <strong>Paste as text</strong> (the other choice, <strong>Send</strong>, transfers
+  it with a protocol: see <a href="#transfers">File transfers</a>). Portside sends it line by line at the pace set in the profile, with a progress bar,
   and reports the result in the status line (e.g. <code>sent 42/42 lines, 1290 B</code>).</p>
   <ul>
     <li><strong>Delay per character</strong> and <strong>delay per line</strong> slow the paste down for devices that drop input.</li>
@@ -512,7 +525,7 @@ portside connect /dev/ttyUSB0 --baud 9600      <span class="c"># COM3 on Windows
 
   <h3 id="gui-settings">Session settings</h3>
   <p><kbd>Ctrl</kbd>+<kbd>,</kbd> opens the settings of the current session. Changes apply
-  immediately without disconnecting. The dialog has four tabs:</p>
+  immediately without disconnecting. The dialog has five tabs:</p>
   <div class="table-wrap"><table>
     <tr><th>Tab</th><th>Settings</th></tr>
     <tr><td>Connection</td><td>Baud rate (pick or type any value), data bits, parity, stop bits, flow control.</td></tr>
@@ -523,6 +536,8 @@ portside connect /dev/ttyUSB0 --baud 9600      <span class="c"># COM3 on Windows
       timestamps, rotation size and how many old files to keep.</td></tr>
     <tr><td>Paste &amp; break</td><td>Character and line delays, wait-for-prompt pattern and timeout,
       break mode and duration.</td></tr>
+    <tr><td>Transfers</td><td>Default protocol, download folder, what to do when a received file
+      already exists, and whether to offer a receive when the device starts <code>sz</code>.</td></tr>
   </table></div>
   <p>To keep these settings for next time, use <strong>Edit ▸ Save session as profile…</strong>
   — see <a href="#profiles">Profiles</a>.</p>
@@ -536,6 +551,8 @@ portside connect /dev/ttyUSB0 --baud 9600      <span class="c"># COM3 on Windows
     <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>New window</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Send a break</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td><td>Paste a file, paced</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td>Send files (XMODEM, YMODEM, ZMODEM, Kermit, raw)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>Receive files</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Start / stop logging</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>Hex view on / off</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Find in the scrollback</td></tr>
@@ -584,6 +601,8 @@ portside connect /dev/ttyUSB0 --log session.log --timestamps elapsed</pre>
     <tr><td><kbd>b</kbd></td><td>Send a break (emulated automatically if needed)</td></tr>
     <tr><td><kbd>d</kbd></td><td>Toggle DTR</td></tr>
     <tr><td><kbd>r</kbd></td><td>Toggle RTS</td></tr>
+    <tr><td><kbd>z</kbd></td><td>Receive the file the device is sending with <code>sz</code>
+      (Portside prints a hint when it sees one); <kbd>Ctrl</kbd>+<kbd>]</kbd> cancels it</td></tr>
     <tr><td><kbd>]</kbd></td><td>Send a literal Ctrl-] to the device</td></tr>
     <tr><td>any other key</td><td>Back to the session</td></tr>
   </table></div>
@@ -610,7 +629,8 @@ portside connect /dev/ttyUSB0 --log session.log --timestamps elapsed</pre>
     <tr><td><code>--drain SECONDS</code></td><td>Keep reading this long before exiting, so the last output is not lost</td><td>0.25</td></tr>
     <tr><td><code>-q</code>, <code>--quiet</code></td><td>No status messages</td><td>off</td></tr>
   </table></div>
-  <p>Other commands: <code>portside profiles …</code> (see <a href="#profiles">Profiles</a>),
+  <p>Other commands: <code>portside send …</code> and <code>portside receive …</code> (see
+  <a href="#xfer-cli">File transfers</a>), <code>portside profiles …</code> (see <a href="#profiles">Profiles</a>),
   <code>portside gui</code> (opens the desktop app), <code>portside --version</code>,
   <code>portside connect --help</code>.</p>
 
@@ -623,7 +643,7 @@ echo $?</pre>
   <div class="table-wrap"><table>
     <tr><th>Code</th><th>Meaning</th></tr>
     <tr><td>0</td><td>Success</td></tr>
-    <tr><td>1</td><td>Other error</td></tr>
+    <tr><td>1</td><td>Other error — including a failed or cancelled file transfer, or a received file that was skipped</td></tr>
     <tr><td>2</td><td>Wrong options, or a missing or invalid profile</td></tr>
     <tr><td>3</td><td>Permission denied</td></tr>
     <tr><td>4</td><td>Port busy (open in another program)</td></tr>
@@ -634,10 +654,113 @@ echo $?</pre>
 </section>
 
 <!-- ============================================================ -->
+<section id="transfers">
+  <h2>File transfers</h2>
+  <p>Portside moves files over the serial line with the classic protocols, in both directions:
+  firmware into a bootloader, a config off a board, a log file back from a device. While a
+  transfer runs it owns the port — typing, pasting and breaks are paused until it finishes —
+  and everything else in Portside keeps working.</p>
+
+  <h3 id="xfer-protocols">Choosing a protocol</h3>
+  <p>Use the one the device has. If it offers several, ZMODEM is the fastest and most robust.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Protocol</th><th>Good for</th><th>On the device</th></tr>
+    <tr><td><strong>XMODEM</strong></td><td>Bootloaders and ROM monitors. One file, no name; the end is
+      padded to a whole block. Checksum or CRC-16, chosen by the receiver.</td>
+      <td>Cisco ROMMON <code>xmodem</code>, U-Boot <code>loadx</code>, <code>rx</code>/<code>sx</code></td></tr>
+    <tr><td><strong>XMODEM-1K</strong></td><td>The same with 1024-byte blocks — much faster on a good line.</td>
+      <td><code>rx</code>, U-Boot <code>loadx</code></td></tr>
+    <tr><td><strong>YMODEM</strong></td><td>Several files with their names, exact sizes and dates.</td>
+      <td>U-Boot <code>loady</code>, <code>rb</code>/<code>sb</code></td></tr>
+    <tr><td><strong>YMODEM-G</strong></td><td>Streaming YMODEM for error-free links (USB, short cables).
+      Any error stops the transfer — it cannot resend.</td><td><code>rb -g</code></td></tr>
+    <tr><td><strong>ZMODEM</strong></td><td>The default. Fast, recovers from errors without starting over,
+      can resume an interrupted download, and starts itself.</td><td><code>rz</code>/<code>sz</code> (lrzsz)</td></tr>
+    <tr><td><strong>Kermit</strong></td><td>Old or picky systems, and lines that are not 8-bit clean.</td>
+      <td><code>kermit -r</code>/<code>-s</code>, <code>gkermit</code></td></tr>
+    <tr><td><strong>Raw</strong></td><td>Send only: the file's bytes as they are, no protocol and no error
+      checking — for devices that just read a stream. An optional chunk size and delay slow it down.</td><td>—</td></tr>
+  </table></div>
+  <div class="note">The order matters. To <strong>send</strong>, start the receiver on the device first
+  (e.g. <code>loady</code>), then send. To <strong>receive</strong>, start Portside's receive first, then
+  the sender on the device (e.g. <code>sb file</code>). ZMODEM is the exception both ways: Portside types
+  <code>rz</code> for you, and notices when the device runs <code>sz</code>.</div>
+
+  <h3 id="xfer-gui">In the desktop app</h3>
+  <ol class="steps">
+    <li>Open the <strong>Transfer</strong> menu and choose <strong>Send file…</strong>
+      (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) or <strong>Receive file…</strong>
+      (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>). You can also drop files on the window and choose
+      <strong>Send</strong>.</li>
+    <li>Pick the protocol. For sending, add the files (XMODEM takes one). For receiving, choose the
+      folder, what happens if a file already exists, and — for XMODEM, which sends no name — the file name.
+      The dialog tells you what to start on the device.</li>
+    <li>A panel in the session's tab shows the file, its progress (and the whole batch's), the speed,
+      the time left and any retries. <strong>Cancel transfer</strong> stops it properly: the device is told,
+      in the protocol's own words, so it stops waiting too.</li>
+    <li>When it ends, the status line shows a summary such as
+      <code>ZMODEM: received 2 files, 1.2 MB in 4.1 s (300 kB/s), CRC-32</code>.</li>
+  </ol>
+  <p>Receive options: <em>Text file: strip the padding</em> removes XMODEM's end-of-file padding
+  (only for text — a binary file may really end in that byte); <em>Continue an interrupted
+  download</em> makes ZMODEM pick up where a broken transfer stopped.</p>
+
+  <h3 id="xfer-auto">ZMODEM auto-start</h3>
+  <p>When you run <code>sz somefile</code> in the device's shell, Portside notices and asks whether
+  to save it (in the desktop app, into your Downloads folder or the profile's folder). When you run
+  <code>rz</code>, it asks which file to send. Saying no cancels the device's command, so it doesn't
+  hang. Turn the question off with <strong>Session settings ▸ Transfers</strong> (or
+  <code>zmodem_auto_start = false</code> in the profile).</p>
+  <p>In <code>portside connect</code>, a line tells you the device is sending; press
+  <kbd>Ctrl</kbd>+<kbd>]</kbd> then <kbd>z</kbd> to receive it into the current folder.</p>
+
+  <h3 id="xfer-cli">From the command line</h3>
+<pre><span class="c"># Send: start the receiver on the device first.</span>
+portside send /dev/ttyUSB0 image.bin -P xmodem-1k --baud 115200
+portside send /dev/ttyUSB0 a.cfg b.cfg -P zmodem
+portside send COM3 blob.bin -P raw --chunk-size 64 --chunk-delay 0.02
+
+<span class="c"># Receive: start this first, then the sender on the device.</span>
+portside receive /dev/ttyUSB0 -P zmodem --into ~/captures
+portside receive COM3 -P xmodem -o flash.bin
+portside receive COM3 -P ymodem --overwrite rename</pre>
+  <p>Progress goes to stderr (one line per file when it is not a terminal, so CI logs stay readable).
+  <kbd>Ctrl</kbd>+<kbd>C</kbd> cancels cleanly. The exit code is 0 only when every file arrived.
+  The line settings and <code>--profile</code> work as for <code>connect</code>.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Option</th><th>Meaning</th><th>Default</th></tr>
+    <tr><td><code>-P</code>, <code>--protocol</code></td><td><code>xmodem</code>, <code>xmodem-1k</code>, <code>ymodem</code>,
+      <code>ymodem-g</code>, <code>zmodem</code>, <code>kermit</code>, or (send only) <code>raw</code></td><td>zmodem, or the profile's</td></tr>
+    <tr><td><code>--timeout SECONDS</code></td><td>How long to wait for the device to start</td><td>60</td></tr>
+    <tr><td><code>-d</code>, <code>--into DIR</code></td><td>Receive: where files go</td><td>current folder, or the profile's</td></tr>
+    <tr><td><code>-o</code>, <code>--output NAME</code></td><td>Receive, XMODEM: the file name</td><td><code>xmodem-DATE-TIME.bin</code></td></tr>
+    <tr><td><code>--overwrite {refuse,rename,overwrite}</code></td><td>Receive: when a file of that name exists</td><td>refuse</td></tr>
+    <tr><td><code>--text</code></td><td>Receive, XMODEM: strip the end-of-file padding</td><td>off</td></tr>
+    <tr><td><code>--checksum</code></td><td>Receive, X/YMODEM: ask for the old 8-bit checksum instead of CRC-16</td><td>off</td></tr>
+    <tr><td><code>--resume</code></td><td>Receive, ZMODEM: continue an interrupted <code>NAME.part</code></td><td>off</td></tr>
+    <tr><td><code>--chunk-size BYTES</code>, <code>--chunk-delay SECONDS</code></td><td>Send, raw: write size and pause</td><td>256, 0</td></tr>
+    <tr><td><code>-q</code>, <code>--quiet</code></td><td>Only errors</td><td>off</td></tr>
+  </table></div>
+
+  <h3 id="xfer-files">Where files go, and what is never done</h3>
+  <ul>
+    <li>Received files are written as <code>NAME.part</code> and renamed when complete, so a broken
+      transfer never leaves a file that looks finished. The sender's date is kept where the protocol carries one.</li>
+    <li>An existing file is <strong>never overwritten</strong> unless you choose <em>Replace it</em>
+      (<code>--overwrite overwrite</code>). The default skips the file (ZMODEM, Kermit) or stops the
+      transfer with a message (XMODEM, YMODEM, which cannot skip). <em>Keep both</em> saves
+      <code>name.1.ext</code>, <code>name.2.ext</code>…</li>
+    <li>Names from the device lose any folder part: a device cannot write outside the chosen folder.</li>
+    <li>ZMODEM's ability to make the receiver <em>run a command</em> (ZCOMMAND) is refused, always.</li>
+    <li>A raw session log keeps every byte of a transfer; a text log gets a one-line note instead.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
 <section id="profiles">
   <h2>Profiles</h2>
   <p>A profile is a named set of all settings: line settings, Enter/Backspace behaviour,
-  terminal options, paste pacing, logging and break. A profile can be <strong>bound to a
+  terminal options, paste pacing, logging, break and transfer defaults. A profile can be <strong>bound to a
   physical adapter</strong> (by its USB ID and serial number); Portside then applies it
   automatically whenever that adapter is connected, whatever port name it gets.</p>
 
@@ -684,7 +807,12 @@ timestamps = "elapsed"
 
 [break]
 mode = "auto"
-duration = 0.25</pre>
+duration = 0.25
+
+[transfer]
+protocol = "ymodem"
+directory = "/srv/tftp"
+overwrite = "rename"</pre>
 
   <details>
     <summary><strong>All profile settings</strong></summary>
@@ -712,6 +840,10 @@ duration = 0.25</pre>
       <tr><td><code>[logging] auto_start</code></td><td>true / false</td><td>false</td></tr>
       <tr><td><code>[logging] max_bytes</code>, <code>keep</code></td><td>rotate after N bytes (0 = never), files kept</td><td>0, 5</td></tr>
       <tr><td><code>[break] mode</code>, <code>duration</code></td><td>"auto"/"native"/"emulated", seconds</td><td>"auto", 0.25</td></tr>
+      <tr><td><code>[transfer] protocol</code></td><td>"xmodem", "xmodem-1k", "ymodem", "ymodem-g", "zmodem", "kermit", "raw"</td><td>"zmodem"</td></tr>
+      <tr><td><code>[transfer] directory</code></td><td>download folder ("" = Downloads in the app, the current folder on the command line)</td><td>""</td></tr>
+      <tr><td><code>[transfer] overwrite</code></td><td>"refuse", "rename", "overwrite"</td><td>"refuse"</td></tr>
+      <tr><td><code>[transfer] zmodem_auto_start</code></td><td>true / false</td><td>true</td></tr>
     </table></div>
   </details>
 
@@ -799,6 +931,22 @@ duration = 0.25</pre>
   <p>Some drivers claim to send a break but don't. Set <strong>Break mode</strong> to
   <em>Emulated only</em> in <strong>Session settings ▸ Paste &amp; break</strong> (or
   <code>--break-mode emulated</code>) and try again during boot.</p>
+
+  <h3>A transfer never starts</h3>
+  <p>Check the order (see <a href="#xfer-protocols">Choosing a protocol</a>): when sending with
+  XMODEM, YMODEM or Kermit the device's receiver must already be running; when receiving, start
+  Portside first. Both ends must use the same protocol — a bootloader's <code>loady</code> needs
+  YMODEM, not XMODEM. The error message after the timeout says what Portside was waiting for.</p>
+
+  <h3>A transfer stops with "too many errors"</h3>
+  <p>The line is losing or corrupting data. Lower the baud rate, enable flow control if the
+  cable has the wires for it, or use a protocol that recovers better (ZMODEM). On a USB link
+  that is error-free, YMODEM-G is fastest; on anything else avoid it.</p>
+
+  <h3>The XMODEM file is bigger than the original</h3>
+  <p>XMODEM has no length field, so the last block arrives padded to 128 or 1024 bytes.
+  For text files tick <em>Text file: strip the padding</em> (<code>--text</code>); for binaries use
+  YMODEM or ZMODEM, which carry the exact size.</p>
 
   <h3>macOS: where are the /dev/tty.* ports?</h3>
   <p>Portside lists only the <code>/dev/cu.*</code> ports. The matching <code>/dev/tty.*</code>

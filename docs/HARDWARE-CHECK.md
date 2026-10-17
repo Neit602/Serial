@@ -1,4 +1,4 @@
-# Hardware check (M2 exit criterion)
+# Hardware check (M2 and M4 exit criteria)
 
 The PRD's exit criterion for M2 is:
 
@@ -58,6 +58,23 @@ Cisco console ports are 9600 8N1 by default; some newer gear is 115200.
 | 18 | `portside connect <port> --baud 9600`, then `Ctrl-]` `b` during a reboot | The headless path also reaches ROMMON; `Ctrl-]` `q` quits | F12, F23 |
 | 19 | `portside connect <port> --reconnect`, unplug and re-plug | Status lines on stderr report the loss and the reconnect | F5 |
 
+## File transfers (M4)
+
+Interop with lrzsz and Kermit runs in CI (`tst_interop`); real gear adds the parts no PTY
+can: slow links, flow control and bootloaders with their own ideas about XMODEM.
+
+| # | Step | Expected | Req |
+| --- | --- | --- | --- |
+| 20 | In ROMMON or U-Boot, start an XMODEM receive (`xmodem -c image`, `loadx`), then Transfer ▸ Send file with XMODEM (and again with XMODEM-1K) | The image arrives; the device verifies it; the panel shows progress and retries | F17 |
+| 21 | U-Boot `loady`, then send with YMODEM | The file arrives with its exact size | F17 |
+| 22 | On a Linux board, run `sz somefile` in the terminal | Portside offers to receive it; accepting saves it to Downloads with the right name and date | F18 |
+| 23 | Run `rz` on the board | Portside asks what to send; the file arrives intact | F18 |
+| 24 | Start a 10 MB ZMODEM send at 115200 and unplug the adapter halfway | Portside reports the loss within seconds, keeps a `.part` file, and the session reconnects when the adapter returns | F18, stability |
+| 25 | Receive the same file again with "Continue an interrupted download" | Only the missing part is sent | F18 |
+| 26 | `kermit -r` (or `gkermit -r`) on the board, send with Kermit; then the other way | Both directions arrive byte-identical | F19 |
+| 27 | Drop a file on the window, choose Send | The transfer dialog opens with the file; sending works as in 20–26 | F19 |
+| 28 | `portside send <port> image.bin -P xmodem` and `portside receive <port> -P zmodem --into /tmp` from a headless box | Progress on stderr; exit code 0; `Ctrl-C` cancels cleanly and the device stops waiting | F23 |
+
 ### Sample config for step 12
 
 ```
@@ -85,3 +102,6 @@ fresh machine where the group has not yet been granted.
   PL2303 revisions) only show up in this checklist.
 - Timing on a PTY is not serial timing: pacing is verified for *ordering and waiting*, not for
   what a 9600-baud console does to a 400-line paste.
+- A PTY has no baud rate, so CI's transfers run at memory speed. Timeouts on a slow link,
+  hardware flow control and a bootloader's small receive buffer are only covered by steps
+  20–28.

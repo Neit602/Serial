@@ -34,6 +34,7 @@ class QTimer;
 namespace portside {
 
 class SessionWorker;
+class StreamClaim;
 
 // Lifecycle of a session; UIs render this directly.
 enum class SessionState { Disconnected, Connecting, Connected, Reconnecting, Closed };
@@ -138,6 +139,18 @@ public:
     // for a bad value; the future reports driver failures.
     QFuture<void> applySettings(const SerialSettings &settings);
 
+    // -- file transfers (F17–F19) --------------------------------------------
+
+    // Hand the byte stream to a file transfer.  Until releaseStream(), every
+    // received byte goes to the claim (and to claimedDataReceived, for raw
+    // logs) instead of dataReceived, and send() and sendBreak() are refused,
+    // so the terminal can neither eat the protocol nor type into it.  Throws
+    // when the session is not connected or the stream is already claimed.
+    std::shared_ptr<StreamClaim> claimStream();
+    // Give the stream back to the terminal.  Idempotent.
+    void releaseStream();
+    bool isStreamClaimed() const { return m_claim != nullptr; }
+
 Q_SIGNALS:
     void stateChanged(portside::SessionState oldState, portside::SessionState newState,
                       const QString &detail);
@@ -147,12 +160,17 @@ Q_SIGNALS:
     void errorRaised(const portside::PortsideError &error, bool fatal);
     // An auto-reconnect attempt is about to happen (F5).
     void reconnectAttempt(int attempt, double delay, const QString &reason);
+    void streamClaimChanged(bool claimed);
+    // Bytes that arrived while a transfer held the stream.
+    void claimedDataReceived(const QByteArray &data);
 
 private:
     template <typename R, typename F>
     QFuture<R> runIo(F &&work);
     template <typename R>
     QFuture<R> notConnected() const;
+    template <typename R>
+    QFuture<R> streamBusy() const;
 
     void setState(SessionState state, const QString &detail = {});
     void drainReceived();
@@ -170,6 +188,7 @@ private:
     SessionWorker *m_worker = nullptr;
     Transport *m_transport = nullptr;
     QTimer *m_reconnectTimer = nullptr;
+    std::shared_ptr<StreamClaim> m_claim;
     quint64 m_generation = 0;
     int m_attempt = 0;
     QString m_reconnectReason;

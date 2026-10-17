@@ -5,9 +5,11 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QIntValidator>
 #include <QLabel>
 #include <QLineEdit>
@@ -31,6 +33,7 @@ SettingsDialog::SettingsDialog(const Profile &profile, QWidget *parent)
     m_tabs->addTab(buildTerminal(), tr("Terminal"));
     m_tabs->addTab(buildLogging(), tr("Logging"));
     m_tabs->addTab(buildPacing(), tr("Paste && break"));
+    m_tabs->addTab(buildTransfers(), tr("Transfers"));
     layout->addWidget(m_tabs);
 
     m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -222,6 +225,50 @@ QWidget *SettingsDialog::buildLogging()
     return page;
 }
 
+QWidget *SettingsDialog::buildTransfers()
+{
+    auto *page = new QWidget(this);
+    auto *form = new QFormLayout(page);
+    m_transferProtocol = new QComboBox(page);
+    for (const Protocol protocol : enumValues<Protocol>())
+        m_transferProtocol->addItem(protocolTitle(protocol), enumName(protocol));
+    m_transferProtocol->setAccessibleName(tr("Default protocol"));
+    form->addRow(tr("Default &protocol"), m_transferProtocol);
+
+    auto *box = new QWidget(page);
+    auto *row = new QHBoxLayout(box);
+    row->setContentsMargins(0, 0, 0, 0);
+    m_transferDirectory = new QLineEdit(box);
+    m_transferDirectory->setPlaceholderText(QDir::toNativeSeparators(defaultDownloadDirectory()));
+    m_transferDirectory->setAccessibleName(tr("Download folder"));
+    auto *browse = new QPushButton(tr("Browse…"), box);
+    browse->setAccessibleName(tr("Choose download folder"));
+    connect(browse, &QPushButton::clicked, this, [this] {
+        const QString chosen = QFileDialog::getExistingDirectory(this, tr("Download folder"),
+                                                                 m_transferDirectory->text());
+        if (!chosen.isEmpty())
+            m_transferDirectory->setText(QDir::toNativeSeparators(chosen));
+    });
+    row->addWidget(m_transferDirectory, 1);
+    row->addWidget(browse);
+    form->addRow(tr("&Download folder"), box);
+
+    m_transferOverwrite = new QComboBox(page);
+    const std::pair<OverwritePolicy, QString> policies[] = {
+        {OverwritePolicy::Refuse, tr("Keep the existing file (skip)")},
+        {OverwritePolicy::Rename, tr("Keep both (name.1.ext)")},
+        {OverwritePolicy::Overwrite, tr("Replace it")}};
+    for (const auto &[policy, label] : policies)
+        m_transferOverwrite->addItem(label, enumName(policy));
+    m_transferOverwrite->setAccessibleName(tr("If a received file exists"));
+    form->addRow(tr("If a received file &exists"), m_transferOverwrite);
+
+    m_zmodemAutoStart = new QCheckBox(tr("Offer to receive when the device starts sz"), page);
+    m_zmodemAutoStart->setAccessibleName(tr("ZMODEM auto-start"));
+    form->addRow(tr("&ZMODEM"), m_zmodemAutoStart);
+    return page;
+}
+
 QWidget *SettingsDialog::buildPacing()
 {
     auto *page = new QWidget(this);
@@ -327,6 +374,11 @@ void SettingsDialog::load(const Profile &profile)
 
     select(m_breakMode, enumName(profile.breakMode));
     m_breakDuration->setValue(profile.breakDuration);
+
+    select(m_transferProtocol, enumName(profile.transfer.protocol));
+    m_transferDirectory->setText(QDir::toNativeSeparators(profile.transfer.directory));
+    select(m_transferOverwrite, enumName(profile.transfer.overwrite));
+    m_zmodemAutoStart->setChecked(profile.transfer.zmodemAutoStart);
     updateTemplatePreview();
 }
 
@@ -378,6 +430,12 @@ Profile SettingsDialog::toProfile() const
 
     profile.breakMode = *enumFromName<BreakMode>(m_breakMode->currentData().toString());
     profile.breakDuration = m_breakDuration->value();
+
+    profile.transfer.protocol = *enumFromName<Protocol>(m_transferProtocol->currentData().toString());
+    profile.transfer.directory = QDir::fromNativeSeparators(m_transferDirectory->text().trimmed());
+    profile.transfer.overwrite =
+        *enumFromName<OverwritePolicy>(m_transferOverwrite->currentData().toString());
+    profile.transfer.zmodemAutoStart = m_zmodemAutoStart->isChecked();
     return profile;
 }
 

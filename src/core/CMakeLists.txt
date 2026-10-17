@@ -22,6 +22,7 @@ add_library(portside_core STATIC
     breaks.h breaks.cpp
     session.h session.cpp
     session_worker.h session_worker.cpp
+    stream_claim.h stream_claim.cpp
     pacing.h pacing.cpp
     decoder.h decoder.cpp
     charwidth.h charwidth.cpp
@@ -32,6 +33,14 @@ add_library(portside_core STATIC
     session_log.h session_log.cpp
     toml.h toml.cpp
     profiles.h profiles.cpp
+    transfer/transfer.h transfer/transfer.cpp
+    transfer/engine.h transfer/engine.cpp
+    transfer/crc.h transfer/crc.cpp
+    transfer/xymodem.cpp
+    transfer/zmodem.h transfer/zmodem.cpp
+    transfer/kermit.h transfer/kermit.cpp
+    transfer/raw.cpp
+    transfer/job.h transfer/job.cpp
 )
 
 # Everything includes "core/xxx.h", "gui/xxx.h" with src/ as the root.

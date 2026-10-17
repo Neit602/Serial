@@ -35,14 +35,19 @@ jobs:
         uses: seanmiddleditch/gha-setup-ninja@v5
 
       # socat gives the integration tests a real pair of virtual serial ports;
-      # it is unavailable on Windows, where those tests skip themselves.  The
-      # font and GL libraries are what Qt needs to render even headless.
-      - name: Install socat and runtime libraries (Linux)
+      # it is unavailable on Windows, where those tests skip themselves.  lrzsz
+      # and Kermit are the other implementations the transfer interop tests
+      # run against (the M4 exit criterion).  The font and GL libraries are
+      # what Qt needs to render even headless.
+      - name: Install socat, lrzsz, Kermit and runtime libraries (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y socat libgl1 libegl1 libxkbcommon0 libfontconfig1 fonts-dejavu-core
+          sudo apt-get install -y socat lrzsz libgl1 libegl1 libxkbcommon0 libfontconfig1 fonts-dejavu-core
+          sudo apt-get install -y gkermit || sudo apt-get install -y ckermit || echo "no Kermit package"
 
+      # Interop runs on Linux, where the exit criterion asks for it; on macOS
+      # the transfer tests run Portside against itself over socat.
       - name: Install socat (macOS)
         if: runner.os == 'macOS'
         run: brew install socat
@@ -66,8 +71,20 @@ jobs:
       - name: Confirm the GUI and integration tiers ran
         shell: bash
         run: |
-          ctest --test-dir build -L gui -N | grep -q "Total Tests: 5"
-          ctest --test-dir build -L socat -N | grep -q "Total Tests: 1"
+          ctest --test-dir build -L gui -N | grep -q "Total Tests: 6"
+          ctest --test-dir build -L socat -N | grep -q "Total Tests: 3"
+          ctest --test-dir build -L transfer -N | grep -q "Total Tests: 5"
+
+      # The exit criterion is interop with lrzsz and Kermit, so on Linux a run
+      # where those tests skipped is a failure, not a pass.
+      - name: Confirm the interop tests ran (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          build/tests/tst_interop -silent 2>&1 | tee interop.txt
+          if grep -q "not installed" interop.txt; then
+            echo "::error::tst_interop skipped: a peer implementation is missing"
+            exit 1
+          fi
 
       - name: Smoke-test the command line
         shell: bash
@@ -80,6 +97,14 @@ jobs:
           out=$(printf 'hello\r' | build/src/cli/portside connect loop:// --baud 115200 --quiet --drain 0.5 | od -An -c | tr -s ' ')
           echo "got: $out"
           test "$out" = " h e l l o \r"
+          build/src/cli/portside send --help
+          build/src/cli/portside receive --help
+          # Nobody answers on loop://: a clear timeout with exit code 1.
+          set +e
+          build/src/cli/portside receive loop:// -P zmodem --timeout 1
+          code=$?
+          set -e
+          test "$code" = 1
 
   sanitizers:
     name: AddressSanitizer + UBSan (ubuntu-latest)
@@ -97,10 +122,11 @@ jobs:
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Install socat and runtime libraries
+      - name: Install socat, lrzsz, Kermit and runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y socat libgl1 libegl1 libxkbcommon0 libfontconfig1 fonts-dejavu-core
+          sudo apt-get install -y socat lrzsz libgl1 libegl1 libxkbcommon0 libfontconfig1 fonts-dejavu-core
+          sudo apt-get install -y gkermit || sudo apt-get install -y ckermit || echo "no Kermit package"
 
       - name: Configure
         run: >

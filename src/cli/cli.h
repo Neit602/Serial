@@ -8,6 +8,9 @@
 //                                optionally as JSON for scripts.
 // * portside connect <port>    — console ↔ port pass-through, with break,
 //                                logging, profiles and auto-reconnect.
+// * portside send <port> <files> / portside receive <port>
+//                              — XMODEM, YMODEM, ZMODEM, Kermit and raw file
+//                                transfers, for scripts and CI.
 // * portside profiles [...]    — list, show, export, import and delete
 //                                saved profiles (F20).
 // * portside gui               — open the desktop application.
@@ -17,6 +20,7 @@
 #include "core/ports.h"
 #include "core/profiles.h"
 #include "core/session_log.h"
+#include "core/transfer/transfer.h"
 
 #include <QByteArray>
 #include <QList>
@@ -76,6 +80,33 @@ struct ConnectOptions
 // Parse `connect`'s arguments (everything after the word "connect").
 // Returns the options, or sets `error` to a usage message.
 std::optional<ConnectOptions> parseConnectArguments(const QStringList &arguments, QString *error);
+
+// Everything `send` and `receive` accept (F17–F19, F23).
+struct TransferCommand
+{
+    TransferDirection direction = TransferDirection::Send;
+    // The port, line settings, profile and --quiet.
+    ConnectOptions line;
+    QStringList files;
+    std::optional<Protocol> protocol;
+    std::optional<double> timeout;
+    // receive
+    QString directory;
+    QString outputName;
+    std::optional<OverwritePolicy> overwrite;
+    bool textMode = false;
+    bool checksum = false;
+    bool resume = false;
+    // raw send
+    int chunkSize = 256;
+    double chunkDelay = 0.0;
+};
+
+std::optional<TransferCommand> parseTransferArguments(TransferDirection direction,
+                                                      const QStringList &arguments, QString *error);
+// Transfer options from the profile's [transfer] table, overridden by flags.
+TransferOptions transferOptionsFor(const TransferCommand &command,
+                                   const std::optional<Profile> &profile);
 
 // Line settings from the profile, overridden by explicit options (F3).
 SerialSettings settingsFor(const ConnectOptions &options, const std::optional<Profile> &profile);

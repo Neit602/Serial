@@ -1,5 +1,6 @@
 #include "core/session_worker.h"
 
+#include "core/stream_claim.h"
 #include "core/transport.h"
 
 #include <QMutexLocker>
@@ -39,7 +40,40 @@ void SessionWorker::reportFailure(const PortsideError &error)
     m_failureReported = true;
     // A dead port keeps signalling; stop listening before telling anyone.
     m_current->close();
+    if (m_claim) {
+        m_claim->fail(error);
+        // A reconnected port belongs to the terminal again.
+        m_claim.reset();
+    }
     Q_EMIT transportFailed(error, m_generation);
+}
+
+void SessionWorker::setClaim(std::shared_ptr<StreamClaim> claim)
+{
+    m_claim = std::move(claim);
+    if (m_claim) {
+        qint64 dropped = 0;
+        const QByteArray pending = takeReceived(&dropped);
+        if (!pending.isEmpty()) {
+            m_claim->push(pending);
+            Q_EMIT claimedReceived(pending);
+        }
+    }
+}
+
+void SessionWorker::writeClaimed(const QByteArray &data)
+{
+    if (m_current == nullptr || m_failureReported)
+        throw PortsideError(ErrorKind::TransportClosed, QStringLiteral("the port is not open"));
+    try {
+        const qint64 written = m_current->write(data);
+        m_current->flushOutput();
+        Q_EMIT claimedWritten(written);
+    } catch (const PortsideError &error) {
+        if (error.isTransportError())
+            reportFailure(error);
+        throw;
+    }
 }
 
 void SessionWorker::shutdown() noexcept
@@ -68,6 +102,11 @@ void SessionWorker::onReadyRead()
     }
     if (data.isEmpty())
         return;
+    if (m_claim) {
+        m_claim->push(data);
+        Q_EMIT claimedReceived(data);
+        return;
+    }
     {
         QMutexLocker lock(&m_rxMutex);
         m_rxSize += data.size();
