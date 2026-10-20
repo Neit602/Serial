@@ -9,7 +9,7 @@ files and the same behaviour on all three operating systems.
 > **Status: milestone M4 (file transfers).** The core, the terminal emulator, the
 > command line, the Qt desktop app, session logging, break signalling, paced paste, TOML
 > profiles and XMODEM/YMODEM/ZMODEM/Kermit transfers are implemented and tested. The
-> original Python implementation (M1–M3) is in git history on the `m3-gui` branch; what
+> original Python implementation (M1–M3) is on the `main` branch; what
 > changed in the C++ port is in [docs/DECISIONS.md](docs/DECISIONS.md) (D39 onwards), and
 > the transfer decisions are D52–D60. Signed installers (M5) come next — see
 > [docs/PRD.md](docs/PRD.md).
