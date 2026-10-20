@@ -230,6 +230,7 @@ and republishes those events as Qt signals. Everything platform-specific lives i
 `portside.platform` and `portside.transport` behind typed interfaces, so the rest of the
 code never branches on `sys.platform`. Paths come from `platformdirs`.
 
+- [docs/instruction.html](docs/instruction.html) — the user guide: what Portside does and how to use it
 - [docs/PRD.md](docs/PRD.md) — product requirements
 - [docs/PLAN.md](docs/PLAN.md) — the M1 task breakdown and outcome
 - [docs/PLAN-M2.md](docs/PLAN-M2.md) — the M2 task breakdown and outcome

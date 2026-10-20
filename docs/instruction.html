@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portside User Guide</title>
+<meta name="description" content="What the Portside serial terminal can do, and how to use its desktop app, command line and profiles.">
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-2: #eef1f5;
+    --text: #1d232b;
+    --muted: #5b6573;
+    --border: #d9dee5;
+    --accent: #0a6b57;
+    --accent-soft: #dff2ec;
+    --code-bg: #f0f2f5;
+    --term-bg: #14171c;
+    --term-fg: #d8dee9;
+    --warn: #8a5a00;
+    --warn-soft: #fff4dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a;
+      --surface: #1a1f26;
+      --surface-2: #222833;
+      --text: #dde3ea;
+      --muted: #98a2b0;
+      --border: #2e3540;
+      --accent: #7fd1b9;
+      --accent-soft: #1d3a33;
+      --code-bg: #232a34;
+      --term-bg: #0d1014;
+      --term-fg: #d8dee9;
+      --warn: #f0c26b;
+      --warn-soft: #3a2f17;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a;
+    --surface: #1a1f26;
+    --surface-2: #222833;
+    --text: #dde3ea;
+    --muted: #98a2b0;
+    --border: #2e3540;
+    --accent: #7fd1b9;
+    --accent-soft: #1d3a33;
+    --code-bg: #232a34;
+    --term-bg: #0d1014;
+    --term-fg: #d8dee9;
+    --warn: #f0c26b;
+    --warn-soft: #3a2f17;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  }
+  a { color: var(--accent); }
+  code, kbd, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+  code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
+  kbd {
+    display: inline-block;
+    padding: 0.05em 0.45em;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--surface);
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+  pre {
+    background: var(--term-bg);
+    color: var(--term-fg);
+    padding: 14px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.88em;
+    line-height: 1.5;
+  }
+  pre .c { color: #7f8b99; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    max-width: 1180px;
+    margin: 0 auto;
+    gap: 32px;
+    padding: 0 16px;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding: 28px 0;
+    font-size: 0.92em;
+  }
+  nav.toc .brand { font-weight: 700; font-size: 1.15em; margin-bottom: 14px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc li { margin: 2px 0; }
+  nav.toc a {
+    display: block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  nav.toc a:hover { background: var(--surface-2); color: var(--text); }
+  nav.toc ol ol { padding-left: 12px; }
+
+  main { padding: 28px 0 80px; min-width: 0; }
+  header.hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 30px;
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 6px; font-size: 2em; line-height: 1.2; }
+  header.hero p { margin: 6px 0; color: var(--muted); max-width: 70ch; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .tag {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+  }
+
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 30px 22px;
+    margin-bottom: 24px;
+  }
+  h2 { font-size: 1.45em; margin: 22px 0 10px; scroll-margin-top: 16px; }
+  h3 { font-size: 1.1em; margin: 24px 0 8px; scroll-margin-top: 16px; }
+  p, li { max-width: 78ch; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .card {
+    background: var(--surface-2);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 1em; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.93em; }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 4px 0 10px 44px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 2px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.94em; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-weight: 600; }
+  td:first-child { white-space: nowrap; }
+
+  .note, .warn {
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 0.95em;
+  }
+  .note { background: var(--accent-soft); border-left: 4px solid var(--accent); }
+  .warn { background: var(--warn-soft); border-left: 4px solid var(--warn); }
+
+  /* A schematic of the main window. */
+  .window {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 16px 0;
+    font-size: 0.82em;
+  }
+  .window .bar {
+    background: var(--surface-2);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    color: var(--muted);
+  }
+  .window .bar b { color: var(--text); font-weight: 600; }
+  .window .body { display: grid; grid-template-columns: 34% 66%; min-height: 240px; }
+  .window .devices { border-right: 1px solid var(--border); padding: 10px; background: var(--surface); }
+  .window .devices div { padding: 3px 6px; border-radius: 4px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .window .devices .sel { background: var(--accent-soft); }
+  .window .term {
+    background: var(--term-bg);
+    color: var(--term-fg);
+    padding: 10px 12px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+  .window .term .g { color: #98c379; }
+  .window .term .r { color: #e06c75; }
+  .window .term .cur { background: #7fd1b9; color: #14171c; }
+  .window .status {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+    padding: 6px 12px;
+    color: var(--muted);
+  }
+  .window .status .on { color: #2f9e44; font-weight: 700; }
+  .callouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 18px; font-size: 0.93em; }
+  .callouts div { color: var(--muted); }
+  .callouts b { color: var(--text); }
+
+  footer { color: var(--muted); font-size: 0.9em; text-align: center; padding: 10px; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav.toc { position: static; max-height: none; padding-bottom: 0; }
+    nav.toc ol ol { display: none; }
+    section, header.hero { padding-left: 18px; padding-right: 18px; }
+    .window .body { grid-template-columns: 1fr; }
+    .window .devices { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Contents">
+  <div class="brand">Portside guide</div>
+  <ol>
+    <li><a href="#overview">What Portside does</a></li>
+    <li><a href="#install">Installing</a></li>
+    <li><a href="#quickstart">Quick start</a></li>
+    <li><a href="#gui">The desktop app</a>
+      <ol>
+        <li><a href="#gui-window">The window</a></li>
+        <li><a href="#gui-connect">Connecting</a></li>
+        <li><a href="#gui-terminal">Working in the terminal</a></li>
+        <li><a href="#gui-break">Sending a break</a></li>
+        <li><a href="#gui-paste">Pasting configs</a></li>
+        <li><a href="#gui-log">Logging</a></li>
+        <li><a href="#gui-signals">Modem signals</a></li>
+        <li><a href="#gui-settings">Session settings</a></li>
+        <li><a href="#gui-shortcuts">Keyboard shortcuts</a></li>
+      </ol>
+    </li>
+    <li><a href="#tui">The terminal UI</a></li>
+    <li><a href="#cli">The command line</a>
+      <ol>
+        <li><a href="#cli-list">Listing ports</a></li>
+        <li><a href="#cli-connect">Connecting</a></li>
+        <li><a href="#cli-raw">Raw pass-through</a></li>
+        <li><a href="#cli-options">All options</a></li>
+        <li><a href="#cli-scripts">Scripting</a></li>
+      </ol>
+    </li>
+    <li><a href="#profiles">Profiles</a></li>
+    <li><a href="#logs">Log files</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<header class="hero">
+  <h1>Portside</h1>
+  <p>A serial terminal for Linux, macOS and Windows. It connects to routers, switches,
+  embedded boards and lab equipment over USB-serial adapters, RS-232 ports and Bluetooth
+  serial — with the same features and the same settings files on every operating system.</p>
+  <p>This guide explains what Portside can do and how to use its three faces:
+  the desktop app <code>portside-gui</code>, the full-screen terminal UI that
+  <code>portside connect</code> opens, and the plain command line <code>portside</code>.</p>
+  <div class="tags">
+    <span class="tag">Python 3.11+</span>
+    <span class="tag">Linux</span><span class="tag">macOS</span><span class="tag">Windows</span>
+    <span class="tag">VT100 / xterm</span><span class="tag">Break &amp; ROMMON</span>
+    <span class="tag">Paced paste</span><span class="tag">Session logs</span><span class="tag">Profiles</span>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section id="overview">
+  <h2>What Portside does</h2>
+  <div class="grid">
+    <div class="card"><h4>Finds your adapters</h4>
+      <p>Lists every serial port with its chip (FTDI, CP210x, CH340, PL2303…), USB ID and
+      serial number, and refreshes within a second or two when you plug something in.</p></div>
+    <div class="card"><h4>A real terminal</h4>
+      <p>VT100/xterm emulation with colours, box drawing, full-screen programs, 10,000 lines
+      of scrollback, search, copy and a hex view.</p></div>
+    <div class="card"><h4>Break that always works</h4>
+      <p>Sends a break to interrupt a boot and reach ROMMON — and emulates one when the
+      adapter's driver cannot send a real break.</p></div>
+    <div class="card"><h4>Pastes configs safely</h4>
+      <p>Feeds a file to the device line by line, with delays or by waiting for the
+      prompt, so slow network gear doesn't drop characters.</p></div>
+    <div class="card"><h4>Records sessions</h4>
+      <p>Logs as readable text with optional timestamps, or as the exact raw bytes, with
+      automatic file names and size-based rotation.</p></div>
+    <div class="card"><h4>Remembers devices</h4>
+      <p>Profiles store all settings and attach to a physical adapter, so the right
+      settings apply even when it shows up as a different port name.</p></div>
+    <div class="card"><h4>Survives unplugging</h4>
+      <p>When a device disappears, Portside waits for it and reconnects — even if it comes
+      back as <code>/dev/ttyUSB1</code> instead of <code>/dev/ttyUSB0</code>.</p></div>
+    <div class="card"><h4>Explains errors</h4>
+      <p>"Permission denied", "port busy" and "port not found" each come with the exact fix
+      for your system, ready to copy.</p></div>
+  </div>
+  <p>Supported line settings: speed from 50 to 4,000,000 baud (any value, not just the
+  common ones), 5–8 data bits, parity None/Even/Odd/Mark/Space, 1, 1.5 or 2 stop bits, and
+  flow control None, RTS/CTS, DSR/DTR or XON/XOFF.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="install">
+  <h2>Installing</h2>
+  <p>Portside is a Python package and needs <strong>Python 3.11 or newer</strong>. The
+  desktop app uses Qt (PySide6) and the terminal UI uses Textual; both are optional extras,
+  so install the ones you want. Run these commands in the Portside source folder.
+  <a href="https://pipx.pypa.io/">pipx</a> keeps Portside in its own environment and puts
+  the <code>portside</code> and <code>portside-gui</code> commands on your PATH.</p>
+
+  <h3>Linux</h3>
+<pre>pipx install ".[gui,tui]"      <span class="c"># or: pip install --user ".[gui,tui]"</span>
+portside --list</pre>
+  <p>On Linux your user must be allowed to open serial devices. If Portside reports
+  "permission denied" it shows the exact command; usually it is:</p>
+<pre>sudo usermod -aG dialout $USER    <span class="c"># "uucp" on Arch — then log out and back in</span></pre>
+
+  <h3>macOS</h3>
+<pre>pipx install ".[gui,tui]"      <span class="c"># or: pip3 install --user ".[gui,tui]"</span>
+portside --list</pre>
+
+  <h3>Windows</h3>
+<pre>py -m pip install --user ".[gui,tui]"
+portside --list</pre>
+  <p>Write ports plainly on the command line: <code>COM12</code>, not <code>\\.\COM12</code>.</p>
+
+  <div class="note">On a server without a desktop, leave out <code>gui</code>:
+  <code>pipx install ".[tui]"</code>. The command line and the terminal UI never load Qt.
+  If you install neither extra, connect with <code>--raw</code> — see
+  <a href="#cli-raw">Raw pass-through</a>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="quickstart">
+  <h2>Quick start</h2>
+  <ol class="steps">
+    <li>Plug in your USB-serial adapter and start <strong>Portside</strong>
+      (<code>portside-gui</code>, or <code>portside gui</code> from a terminal).</li>
+    <li>Your adapter appears in the <strong>Devices</strong> list on the left. Click it.</li>
+    <li>Press <kbd>Enter</kbd> (or double-click it, or press <strong>Connect</strong>). A tab opens
+      and you are connected at 115200 8N1.</li>
+    <li>Press <kbd>Enter</kbd> in the terminal — the device's prompt should appear. If you see
+      garbage instead, the speed is wrong: press <kbd>Ctrl</kbd>+<kbd>,</kbd> and choose the
+      right baud rate (Cisco consoles use <strong>9600</strong>).</li>
+  </ol>
+  <p>Prefer the terminal? The same thing from the command line opens the
+  <a href="#tui">terminal UI</a>; <kbd>F1</kbd> shows its keys and <kbd>F10</kbd> quits:</p>
+<pre>portside --list
+portside connect /dev/ttyUSB0 --baud 9600      <span class="c"># COM3 on Windows, /dev/cu.… on macOS</span></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="gui">
+  <h2>The desktop app</h2>
+
+  <h3 id="gui-window">The window</h3>
+  <div class="window" role="img" aria-label="Schematic of the Portside main window">
+    <div class="bar"><b>File</b><b>Edit</b><b>Session</b><b>View</b><b>Help</b>
+      <span>| Connect · Disconnect · Send break · Paste file · Logging · Hex view · Find</span></div>
+    <div class="body">
+      <div class="devices">
+        <div class="sel">/dev/ttyUSB0 &nbsp;FTDI FT232R</div>
+        <div>/dev/ttyACM0 &nbsp;Raspberry Pi Pico</div>
+        <div>/dev/ttyS0 &nbsp;&nbsp;&nbsp;serial port</div>
+      </div>
+      <div class="term">
+        Switch# show ip interface brief<br>
+        Gi1/0/1 &nbsp;10.0.0.1 &nbsp;&nbsp;&nbsp;YES NVRAM <span class="g">up</span><br>
+        Gi1/0/2 &nbsp;unassigned YES unset <span class="r">down</span><br>
+        Switch# <span class="cur">&nbsp;</span>
+      </div>
+    </div>
+    <div class="status">
+      <span><span class="on">CTS</span> <span class="on">DSR</span> DCD RI &nbsp; ☑ DTR ☑ RTS</span>
+      <span>/dev/ttyUSB0 · 9600 8N1 none · in 1204 B · out 36 B · connected</span>
+    </div>
+  </div>
+  <div class="callouts">
+    <div><b>Devices</b> — every port that is plugged in. Hover a row to see the full device
+      identity, the driver and (on Linux) the stable <code>/dev/serial/by-id</code> path.</div>
+    <div><b>Tabs</b> — one per session. Titles show the port and speed, e.g. <code>ttyUSB0 — 9600</code>.</div>
+    <div><b>Terminal</b> — click it and type; everything you type goes to the device.</div>
+    <div><b>Signals</b> — live modem lines and DTR/RTS switches (see below).</div>
+    <div><b>Status line</b> — port, line settings, bytes in/out, and the session state.</div>
+  </div>
+
+  <h3 id="gui-connect">Connecting and managing sessions</h3>
+  <ul>
+    <li><strong>Connect</strong> (<kbd>Ctrl</kbd>+<kbd>N</kbd>, <kbd>Enter</kbd> or double-click) uses the
+      profile bound to that adapter if there is one, otherwise the defaults (115200 8N1, no flow control).</li>
+    <li><strong>Connect with settings…</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>) asks for
+      the settings first.</li>
+    <li>You can have many sessions open at once, each in its own tab and completely independent.</li>
+    <li><strong>File ▸ Detach tab to window</strong> moves a session into its own window
+      without disconnecting it. <strong>File ▸ New Window</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd>)
+      opens an empty one.</li>
+    <li><strong>Disconnect</strong> (<kbd>Ctrl</kbd>+<kbd>W</kbd>) or the tab's × closes a session;
+      Portside asks first if it is still connected.</li>
+    <li>If the cable is pulled, the status line shows <em>reconnecting</em> and Portside
+      reconnects by itself when the same adapter returns — even under a different port name.</li>
+  </ul>
+
+  <h3 id="gui-terminal">Working in the terminal</h3>
+  <ul>
+    <li><strong>Typing</strong>: every key goes to the device, including <kbd>Ctrl</kbd>+<kbd>C</kbd>,
+      <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Tab</kbd>, arrows and F-keys. What <kbd>Enter</kbd> and
+      <kbd>Backspace</kbd> send is set per profile (CR and DEL by default).</li>
+    <li><strong>Scrollback</strong>: mouse wheel, or <kbd>PgUp</kbd>/<kbd>PgDn</kbd>. New output does
+      not pull you back down while you read; typing anything returns to the live output.
+      The status line shows <code>scrollback -N</code> while you are scrolled up.</li>
+    <li><strong>Copy</strong>: drag with the mouse to select, then <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>.</li>
+    <li><strong>Find</strong>: <kbd>Ctrl</kbd>+<kbd>F</kbd> opens a search bar under the terminal.
+      Matches are highlighted and counted; <kbd>Enter</kbd> or <strong>Next</strong>/<strong>Previous</strong>
+      jump between them through the whole scrollback. The search is literal — you can type
+      <code>10.0.0.1</code> or <code>Gi1/0/1</code> without escaping anything.</li>
+    <li><strong>Hex view</strong>: <kbd>Ctrl</kbd>+<kbd>H</kbd> shows the received bytes as a
+      hex dump (offset, hex, ASCII) — useful for binary protocols and wrong-baud-rate noise.</li>
+    <li><strong>Clear</strong>: <kbd>Ctrl</kbd>+<kbd>K</kbd> empties the screen and scrollback.</li>
+    <li><strong>Themes</strong>: <strong>View ▸ Theme</strong> — Dark, Light or High contrast. Portside remembers your choice.</li>
+  </ul>
+
+  <h3 id="gui-break">Sending a break</h3>
+  <p>Press <kbd>Ctrl</kbd>+<kbd>B</kbd> (or <strong>Send break</strong> on the toolbar). This is what
+  interrupts a Cisco or Juniper boot and drops it into ROMMON. The status bar reports what was sent:</p>
+  <ul>
+    <li><code>native break, 250 ms</code> — the adapter's driver produced a real break.</li>
+    <li><code>emulated break, 250 ms at 50 baud (2 zero bytes)</code> — the driver cannot send a break,
+      so Portside briefly switched to a very low speed and sent zero bytes, which the device
+      sees as a break. Your line settings are restored immediately afterwards.</li>
+  </ul>
+  <p>The break length and mode (automatic, native only, emulated only) are in
+  <strong>Session settings ▸ Paste &amp; break</strong>.</p>
+
+  <h3 id="gui-paste">Pasting configurations</h3>
+  <p>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> and choose a file — or simply drag a file onto the
+  window. Portside sends it line by line at the pace set in the profile, with a progress bar,
+  and reports the result in the status line (e.g. <code>sent 42/42 lines, 1290 B</code>).</p>
+  <ul>
+    <li><strong>Delay per character</strong> and <strong>delay per line</strong> slow the paste down for devices that drop input.</li>
+    <li><strong>Wait for prompt</strong> is the most reliable option: each next line is sent only after
+      the device prints its prompt. For Cisco-style prompts use <code>[&gt;#]\s*$</code>.</li>
+    <li>If the prompt never arrives within the timeout, the paste stops (or carries on, if you untick
+      <em>Stop the paste if the prompt never arrives</em>).</li>
+  </ul>
+
+  <h3 id="gui-log">Logging a session</h3>
+  <p>Press <kbd>Ctrl</kbd>+<kbd>L</kbd> to start recording; the status bar shows where the file is,
+  and the status line shows <code>recording</code>. Press it again to stop. To record every session
+  automatically, tick <em>Start logging when the session connects</em> in the settings. See
+  <a href="#logs">Log files</a> for formats, names and locations.</p>
+
+  <h3 id="gui-signals">Modem signals</h3>
+  <p>The bottom-left panel shows the input lines, refreshed every second:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Appearance</th><th>Meaning</th></tr>
+    <tr><td><strong style="color:#2f9e44">CTS</strong> green, bold</td><td>The line is asserted (high).</td></tr>
+    <tr><td><span style="color:#868e96">CTS</span> grey</td><td>The line is low.</td></tr>
+    <tr><td><em style="color:#adb5bd">CTS</em> pale, italic</td><td>This adapter's driver does not report the line at all — it is unknown, not low.</td></tr>
+  </table></div>
+  <p>The <strong>DTR</strong> and <strong>RTS</strong> check boxes drive the output lines (both are on when a
+  session opens). Some boards use them for reset or boot mode. If the driver has no such lines,
+  the boxes grey out and their tooltip says why.</p>
+
+  <h3 id="gui-settings">Session settings</h3>
+  <p><kbd>Ctrl</kbd>+<kbd>,</kbd> opens the settings of the current session. Changes apply
+  immediately without disconnecting. The dialog has four tabs:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Tab</th><th>Settings</th></tr>
+    <tr><td>Connection</td><td>Baud rate (pick or type any value), data bits, parity, stop bits, flow control.</td></tr>
+    <tr><td>Terminal</td><td>What Enter sends (CR, LF, CR LF, nothing), how received line endings are shown,
+      local echo, what Backspace sends (DEL or BS), character set (UTF-8, ASCII, Latin-1, CP437, CP850),
+      strip the high bit, scrollback size, font and size.</td></tr>
+    <tr><td>Logging</td><td>Log automatically, text or raw format, folder, file name template (with a live preview),
+      timestamps, rotation size and how many old files to keep.</td></tr>
+    <tr><td>Paste &amp; break</td><td>Character and line delays, wait-for-prompt pattern and timeout,
+      break mode and duration.</td></tr>
+  </table></div>
+  <p>To keep these settings for next time, use <strong>Edit ▸ Save session as profile…</strong>
+  — see <a href="#profiles">Profiles</a>.</p>
+
+  <h3 id="gui-shortcuts">Keyboard shortcuts</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Shortcut</th><th>Action</th></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Connect to the selected device</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>Connect with settings first</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>W</kbd></td><td>Close the session</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>New window</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Send a break</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td><td>Paste a file, paced</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Start / stop logging</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>Hex view on / off</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Find in the scrollback</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td><td>Copy the selection</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Clear the terminal</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td><td>Session settings</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Profiles</td></tr>
+    <tr><td><kbd>PgUp</kbd> / <kbd>PgDn</kbd></td><td>Scroll the scrollback</td></tr>
+    <tr><td><kbd>F1</kbd></td><td>List all shortcuts</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Q</kbd></td><td>Quit</td></tr>
+  </table></div>
+  <div class="note">On macOS, use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd> for these shortcuts.</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="tui">
+  <h2>The terminal UI</h2>
+  <p><code>portside connect &lt;port&gt;</code> run in a terminal opens a full-screen terminal
+  UI (it needs the <code>tui</code> extra). It is the same terminal as the desktop app —
+  VT100/xterm emulation, 10,000 lines of scrollback, find, hex view, paced paste and
+  logging — inside your SSH session or console window.</p>
+  <p>The line at the bottom shows the port, line settings, bytes in/out, the modem lines,
+  <code>REC</code> and the file name while logging, <code>scrollback -N</code> while you are
+  scrolled up, paste progress and the session state.</p>
+
+  <h3 id="tui-keys">Keys</h3>
+  <p>Portside uses the function keys for its own commands, because a serial console almost
+  never needs them. Everything else goes to the device — <kbd>Ctrl</kbd>+<kbd>C</kbd>,
+  <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Tab</kbd>, arrows and all.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><kbd>F1</kbd></td><td>Show the key map</td></tr>
+    <tr><td><kbd>F2</kbd></td><td>Send a break (emulated automatically if the driver has none)</td></tr>
+    <tr><td><kbd>F3</kbd></td><td>Find in the screen and scrollback: type the text, <kbd>Enter</kbd> searches, <kbd>Esc</kbd> closes</td></tr>
+    <tr><td><kbd>F4</kbd></td><td>Paste a file, paced: type its path and press <kbd>Enter</kbd>. Press <kbd>F4</kbd> again to cancel a running paste</td></tr>
+    <tr><td><kbd>F5</kbd></td><td>Start / stop logging</td></tr>
+    <tr><td><kbd>F6</kbd></td><td>Hex view on / off</td></tr>
+    <tr><td><kbd>F7</kbd></td><td>Cycle the log timestamp mode (off, absolute, elapsed, delta)</td></tr>
+    <tr><td><kbd>F8</kbd></td><td>Cycle the colour themes (dark, light, Tokyo Night)</td></tr>
+    <tr><td><kbd>F9</kbd></td><td>Clear the screen and scrollback</td></tr>
+    <tr><td><kbd>F10</kbd> or <kbd>Ctrl</kbd>+<kbd>]</kbd></td><td>Quit</td></tr>
+    <tr><td><kbd>PgUp</kbd> / <kbd>PgDn</kbd></td><td>Scroll the scrollback; typing returns to the live output</td></tr>
+  </table></div>
+  <p>Line settings cannot be changed inside the terminal UI. To try another speed, quit and
+  connect again with different options, or save them in a <a href="#profiles">profile</a>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="cli">
+  <h2>The command line</h2>
+  <p>The <code>portside</code> program does everything without a window — useful over SSH,
+  on lab servers and in scripts.</p>
+
+  <h3 id="cli-list">Listing ports</h3>
+<pre>portside --list             <span class="c"># table of ports</span>
+portside --list --verbose   <span class="c"># adds the driver and stable path</span>
+portside --list --json      <span class="c"># for scripts</span>
+
+PORT          DESCRIPTION      VID:PID    CHIP         SERIAL
+/dev/ttyUSB0  FT232R USB UART  0403:6001  FTDI FT232R  A50285BI
+/dev/ttyS0    -                -          -            -</pre>
+
+  <h3 id="cli-connect">Connecting</h3>
+<pre>portside connect /dev/ttyUSB0 --baud 115200
+portside connect COM3 --baud 9600 --parity E --data-bits 7 --stop-bits 2
+portside connect /dev/ttyUSB0 --profile cisco-lab        <span class="c"># use a saved profile</span>
+portside connect /dev/ttyUSB0 --reconnect                <span class="c"># wait for the device after a replug</span>
+portside connect /dev/ttyUSB0 --log session.log --timestamps elapsed</pre>
+  <p>In an interactive terminal this opens the <a href="#tui">terminal UI</a>. When input or
+  output is piped, or with <code>--raw</code>, Portside uses raw pass-through instead.</p>
+
+  <h3 id="cli-raw">Raw pass-through</h3>
+  <p>In raw mode there is no terminal emulation: your own terminal window becomes the device's
+  console, and the bytes you type go to the device exactly as typed. Device output goes to
+  the screen (stdout); Portside's own messages, such as <code>[portside] connected to …</code>,
+  go to stderr.</p>
+  <p>Press <kbd>Ctrl</kbd>+<kbd>]</kbd> to quit. Raw mode has no break or DTR/RTS keys —
+  use the terminal UI or the desktop app for those.</p>
+
+  <h3 id="cli-options">All options of <code>portside connect</code></h3>
+  <div class="table-wrap"><table>
+    <tr><th>Option</th><th>Meaning</th><th>Default</th></tr>
+    <tr><td><code>-b</code>, <code>--baud RATE</code></td><td>Speed, 50–4000000. Also accepts <code>115_200</code> or <code>0x1C200</code>.</td><td>115200</td></tr>
+    <tr><td><code>--data-bits {5,6,7,8}</code></td><td>Data bits</td><td>8</td></tr>
+    <tr><td><code>--parity {N,E,O,M,S}</code></td><td>Parity</td><td>N</td></tr>
+    <tr><td><code>--stop-bits {1,1.5,2}</code></td><td>Stop bits</td><td>1</td></tr>
+    <tr><td><code>--flow {none,rtscts,dsrdtr,xonxoff}</code></td><td>Flow control</td><td>none</td></tr>
+    <tr><td><code>-p</code>, <code>--profile NAME</code></td><td>Use a saved profile. Options you type still win over it.</td><td>—</td></tr>
+    <tr><td><code>--reconnect</code></td><td>Wait for the device and reconnect if it disappears</td><td>off</td></tr>
+    <tr><td><code>--send-ending {cr,lf,crlf,none}</code></td><td>What Enter sends</td><td>cr</td></tr>
+    <tr><td><code>--backspace {bs,del}</code></td><td>What Backspace sends</td><td>del</td></tr>
+    <tr><td><code>--local-echo</code></td><td>Show what you type (for devices that don't echo)</td><td>off</td></tr>
+    <tr><td><code>--raw</code></td><td>Raw pass-through instead of the terminal UI; keys are sent exactly as typed</td><td>off (on when piped)</td></tr>
+    <tr><td><code>--break-mode {auto,native,emulated}</code></td><td>How a break is produced</td><td>auto</td></tr>
+    <tr><td><code>--break-duration SECONDS</code></td><td>Break length</td><td>0.25</td></tr>
+    <tr><td><code>--log PATH</code></td><td>Record the session to a file</td><td>—</td></tr>
+    <tr><td><code>--log-format {text,raw}</code></td><td>Readable text or exact bytes</td><td>text</td></tr>
+    <tr><td><code>--timestamps {off,absolute,elapsed,delta}</code></td><td>Timestamp each logged line</td><td>off</td></tr>
+    <tr><td><code>--drain SECONDS</code></td><td>Keep reading this long before exiting, so the last output is not lost</td><td>0.25</td></tr>
+    <tr><td><code>-q</code>, <code>--quiet</code></td><td>No status messages</td><td>off</td></tr>
+  </table></div>
+  <p>Other commands: <code>portside profiles …</code> (see <a href="#profiles">Profiles</a>),
+  <code>portside gui</code> (opens the desktop app), <code>portside --version</code>,
+  <code>portside connect --help</code>.</p>
+
+  <h3 id="cli-scripts">Scripting</h3>
+  <p>When input is piped, Portside forwards it byte-for-byte and ends when the input ends.
+  Use it to send commands and capture replies:</p>
+<pre>printf 'show version\r' | portside connect /dev/ttyUSB0 --baud 9600 --quiet --drain 2 &gt; version.txt
+echo $?</pre>
+  <p>Scripts can check the exit code:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Code</th><th>Meaning</th></tr>
+    <tr><td>0</td><td>Success</td></tr>
+    <tr><td>1</td><td>Other error</td></tr>
+    <tr><td>2</td><td>Wrong options, or a missing or invalid profile</td></tr>
+    <tr><td>3</td><td>Permission denied</td></tr>
+    <tr><td>4</td><td>Port busy (open in another program)</td></tr>
+    <tr><td>5</td><td>Port not found, or the device disappeared</td></tr>
+  </table></div>
+  <div class="note">For experiments without hardware, <code>loop://</code> is a built-in test port
+  that echoes back everything you send: <code>portside connect loop://</code>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="profiles">
+  <h2>Profiles</h2>
+  <p>A profile is a named set of all settings: line settings, Enter/Backspace behaviour,
+  terminal options, paste pacing, logging and break. A profile can be <strong>bound to a
+  physical adapter</strong> (by its USB ID and serial number); Portside then applies it
+  automatically whenever that adapter is connected, whatever port name it gets.</p>
+
+  <h3>In the desktop app</h3>
+  <ul>
+    <li><strong>Edit ▸ Save session as profile…</strong> saves the current session's settings under a name
+      and binds the profile to the connected adapter.</li>
+    <li><strong>Edit ▸ Profiles…</strong> (<kbd>Ctrl</kbd>+<kbd>P</kbd>) lists your profiles. The one bound to
+      the current device is marked <em>(this device)</em>. Buttons: <strong>Edit</strong>,
+      <strong>Bind to device</strong>, <strong>Duplicate</strong>, <strong>Delete</strong>,
+      <strong>Export</strong> and <strong>Import</strong> (to share with colleagues).</li>
+  </ul>
+
+  <h3>From the command line</h3>
+<pre>portside profiles                               <span class="c"># list</span>
+portside profiles show cisco-lab                <span class="c"># print it</span>
+portside profiles export cisco-lab --file cisco-lab.toml
+portside profiles import cisco-lab.toml
+portside profiles delete cisco-lab</pre>
+
+  <h3>The file format</h3>
+  <p>Profiles are plain TOML text files, easy to edit by hand and to keep in git. The same
+  file works on Linux, macOS and Windows. Only the settings you want to change need to be
+  present; everything else takes its default.</p>
+<pre>name = "cisco-lab"
+description = "Core switches, rack 4"
+device_keys = ["usb_0403_6001_A50285BI"]
+
+[serial]
+baudrate = 9600
+parity = "N"
+
+[text]
+send_ending = "cr"
+backspace = "del"
+
+[pacing]
+line_delay = 0.05
+wait_for_prompt = "[&gt;#]\\s*$"
+
+[logging]
+auto_start = true
+timestamps = "elapsed"
+
+[break]
+mode = "auto"
+duration = 0.25</pre>
+
+  <details>
+    <summary><strong>All profile settings</strong></summary>
+    <div class="table-wrap"><table>
+      <tr><th>Setting</th><th>Values</th><th>Default</th></tr>
+      <tr><td><code>[serial] baudrate</code></td><td>50 – 4000000</td><td>115200</td></tr>
+      <tr><td><code>[serial] data_bits</code></td><td>5, 6, 7, 8</td><td>8</td></tr>
+      <tr><td><code>[serial] parity</code></td><td>"N", "E", "O", "M", "S"</td><td>"N"</td></tr>
+      <tr><td><code>[serial] stop_bits</code></td><td>1, 1.5, 2</td><td>1</td></tr>
+      <tr><td><code>[serial] flow_control</code></td><td>"none", "rtscts", "dsrdtr", "xonxoff"</td><td>"none"</td></tr>
+      <tr><td><code>[text] send_ending</code></td><td>"cr", "lf", "crlf", "none"</td><td>"cr"</td></tr>
+      <tr><td><code>[text] receive_ending</code></td><td>"none" (as received), "lf", "cr", "crlf"</td><td>"none"</td></tr>
+      <tr><td><code>[text] local_echo</code></td><td>true / false</td><td>false</td></tr>
+      <tr><td><code>[text] backspace</code></td><td>"del", "bs"</td><td>"del"</td></tr>
+      <tr><td><code>[terminal] scrollback</code></td><td>lines</td><td>10000</td></tr>
+      <tr><td><code>[terminal] charset</code></td><td>"utf-8", "ascii", "latin-1", "cp437", "cp850"</td><td>"utf-8"</td></tr>
+      <tr><td><code>[terminal] strip_high_bit</code></td><td>true / false</td><td>false</td></tr>
+      <tr><td><code>[terminal] columns</code>, <code>rows</code></td><td>initial terminal size</td><td>80, 24</td></tr>
+      <tr><td><code>[terminal] font_family</code>, <code>font_size</code></td><td>font name ("" = system monospace), points</td><td>"", 11</td></tr>
+      <tr><td><code>[terminal] theme</code></td><td>"dark", "light", "high-contrast"</td><td>"dark"</td></tr>
+      <tr><td><code>[pacing] char_delay</code>, <code>line_delay</code></td><td>seconds</td><td>0, 0.05</td></tr>
+      <tr><td><code>[pacing] wait_for_prompt</code></td><td>regular expression ("" = don't wait)</td><td>""</td></tr>
+      <tr><td><code>[pacing] prompt_timeout</code>, <code>abort_on_timeout</code></td><td>seconds, true / false</td><td>5, true</td></tr>
+      <tr><td><code>[logging] directory</code>, <code>template</code></td><td>folder ("" = default), file name template</td><td>"", see <a href="#logs">Log files</a></td></tr>
+      <tr><td><code>[logging] format</code>, <code>timestamps</code></td><td>"text"/"raw", "off"/"absolute"/"elapsed"/"delta"</td><td>"text", "off"</td></tr>
+      <tr><td><code>[logging] auto_start</code></td><td>true / false</td><td>false</td></tr>
+      <tr><td><code>[logging] max_bytes</code>, <code>keep</code></td><td>rotate after N bytes (0 = never), files kept</td><td>0, 5</td></tr>
+      <tr><td><code>[break] mode</code>, <code>duration</code></td><td>"auto"/"native"/"emulated", seconds</td><td>"auto", 0.25</td></tr>
+    </table></div>
+  </details>
+
+  <h3>Where profiles are stored</h3>
+  <div class="table-wrap"><table>
+    <tr><th>System</th><th>Folder</th></tr>
+    <tr><td>Linux</td><td><code>~/.config/Portside/profiles</code></td></tr>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/Portside/profiles</code></td></tr>
+    <tr><td>Windows</td><td><code>%APPDATA%\Portside\profiles</code></td></tr>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="logs">
+  <h2>Log files</h2>
+  <p>Two formats:</p>
+  <ul>
+    <li><strong>Text</strong> — what you saw, decoded, one line per line with Unix (LF) line
+      endings on every system, optionally with timestamps. Portside adds notes such as
+      <code>[portside] error: …</code> or paste results.</li>
+    <li><strong>Raw</strong> — the exact bytes received, unchanged — for protocol debugging.</li>
+  </ul>
+  <p>Timestamps mark when each line <em>started</em> arriving:</p>
+<pre>[2026-10-16T14:03:07.250+02:00] Switch&gt;     <span class="c"># absolute</span>
+[00:01:12.034] Switch&gt;                     <span class="c"># elapsed since connect</span>
+[+00:00:00.412] Switch&gt;                    <span class="c"># delta since the previous line</span></pre>
+  <p>File names come from a template. The default is
+  <code>portside-{port}-{date}-{time}.log</code>, giving names like
+  <code>portside-_dev_ttyUSB0-20261016-140307.log</code>. Available placeholders:
+  <code>{port}</code> (or <code>{device}</code>), <code>{date}</code>, <code>{time}</code>,
+  <code>{profile}</code>, <code>{n}</code>. Characters that are not allowed in file names are
+  replaced automatically.</p>
+  <p>With rotation enabled, a full file is renamed to <code>name.1.log</code>,
+  <code>name.2.log</code>… and only the newest ones are kept. Restarting a log appends to the
+  existing file rather than overwriting it.</p>
+  <div class="table-wrap"><table>
+    <tr><th>System</th><th>Default log folder</th></tr>
+    <tr><td>Linux</td><td><code>~/.local/state/Portside/log</code></td></tr>
+    <tr><td>macOS</td><td><code>~/Library/Logs/Portside</code></td></tr>
+    <tr><td>Windows</td><td><code>%LOCALAPPDATA%\Portside\Logs</code></td></tr>
+  </table></div>
+  <p>A profile's <code>[logging] directory</code>, or the <strong>Folder</strong> field in the
+  Logging settings, overrides the default folder.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="trouble">
+  <h2>Troubleshooting</h2>
+  <p>When a port cannot be opened, Portside shows a dialog (or prints a message) with the
+  fix for your system. In the desktop app, <strong>Copy fix</strong> puts the command on the clipboard.</p>
+
+  <h3>"Permission denied" (Linux)</h3>
+  <p>Your user is not in the group that owns the device. Portside names the right group —
+  <code>dialout</code> on Debian/Ubuntu, <code>uucp</code> on Arch:</p>
+<pre>sudo usermod -aG dialout $USER     <span class="c"># then log out and back in</span></pre>
+
+  <h3>"Port is busy"</h3>
+  <p>Another program has the port open — another terminal (minicom, screen, PuTTY, Arduino IDE),
+  another Portside window, or on Linux often ModemManager. Close it and connect again. On Linux
+  <code>sudo fuser -v /dev/ttyUSB0</code> shows which program it is. On Windows, "access denied"
+  almost always means the same thing.</p>
+
+  <h3>The adapter is not in the list</h3>
+  <ul>
+    <li>Check the cable and try another USB port; the list refreshes by itself.</li>
+    <li>Windows: open Device Manager ▸ <em>Ports (COM &amp; LPT)</em>. A yellow warning sign means
+      the driver is missing — CH340/CH341 adapters usually need the vendor's driver.</li>
+    <li>Ports that are not listed (e.g. Bluetooth <code>/dev/rfcomm0</code>) can still be used by
+      typing their name: <code>portside connect /dev/rfcomm0</code>.</li>
+  </ul>
+
+  <h3>The screen shows garbage</h3>
+  <p>The speed or framing is wrong. Common values: <strong>9600 8N1</strong> for Cisco and most
+  network equipment, <strong>115200 8N1</strong> for development boards. Change it with
+  <kbd>Ctrl</kbd>+<kbd>,</kbd> in the desktop app — the session stays connected. In the
+  terminal UI, quit and reconnect with the right <code>--baud</code>. If text looks right but some
+  characters are odd, try another character set (CP437 for old DOS-style boxes) or
+  <em>Strip the high bit</em>.</p>
+
+  <h3>Backspace or Enter don't work properly</h3>
+  <p>Switch <em>Backspace sends</em> between DEL and BS, or <em>Enter sends</em> between CR and
+  CR LF, in the Terminal settings. If you cannot see what you type, enable <em>local echo</em>.</p>
+
+  <h3>The break does not reach ROMMON</h3>
+  <p>Some drivers claim to send a break but don't. Set <strong>Break mode</strong> to
+  <em>Emulated only</em> in <strong>Session settings ▸ Paste &amp; break</strong> (or
+  <code>--break-mode emulated</code>) and try again during boot.</p>
+
+  <h3>macOS: where are the /dev/tty.* ports?</h3>
+  <p>Portside lists only the <code>/dev/cu.*</code> ports. The matching <code>/dev/tty.*</code>
+  ports wait for a carrier signal when opened and appear to hang, so they are hidden on purpose.</p>
+
+  <div class="warn">Pasted text is sent to the device exactly as configured. Before pasting a
+  long configuration into production equipment, test the pacing settings on a lab device.</div>
+</section>
+
+<footer>Portside (Python edition) — MIT licensed. See also <code>README.md</code> and <code>docs/DECISIONS.md</code> in the source tree.</footer>
+</main>
+</div>
+</body>
+</html>
