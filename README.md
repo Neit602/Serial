@@ -10,6 +10,9 @@ files and the same behaviour on all three operating systems.
 > PySide6 desktop app, session logging, break signalling, paced paste and TOML profiles
 > are implemented and tested. File transfers (M4) and signed installers (M5) come next —
 > see [docs/PRD.md](docs/PRD.md).
+>
+> Portside has since been rewritten in C++ with Qt 6 (GUI and CLI, with M4 file
+> transfers); that version is on the `cpp_version` branch.
 
 ## What works today
 
